@@ -80,9 +80,11 @@ export function FacebookPanel({ settings, draft, onChange }: Props) {
             </ul>
           </li>
           <li>
-            <strong>Only if Facebook still refuses the sign-in: create a login configuration.</strong> Apps using <strong>Facebook Login for Business</strong> can ask for a saved configuration instead of a permission list.
-            Open <strong>Configurations → Create configuration</strong>, choose the <strong>General</strong> login variation and a <strong>User access token</strong>, add the three permissions above, then copy the
-            <strong> Configuration ID</strong> into the optional box on this page and save. You can leave this out if the connection works without it.
+            <strong>If your app uses Facebook Login for Business, create a login configuration.</strong> You will know: it is in the app&apos;s left-hand menu. Such apps ignore the permissions Social Hub asks for and
+            grant only what a saved configuration lists - without one, connecting appears to work but Facebook then refuses to let us read or publish posts
+            (&ldquo;requires the pages_read_engagement permission&rdquo;). Open <strong>Facebook Login for Business → Configurations → Create configuration</strong>, choose the
+            <strong> General</strong> login variation and a <strong>User access token</strong>, add all three permissions above, then copy the <strong>Configuration ID</strong> into the optional box on this page and save.
+            An older app with plain <strong>Facebook Login</strong> does not need this.
           </li>
           <li>
             <strong>Copy the app details here.</strong> In the app, open <strong>App settings → Basic</strong>. Copy the <strong>App ID</strong> and click <strong>Show</strong> next to the

@@ -60,6 +60,18 @@ async function graphPost(path: string, token: string, values: Record<string, str
   return asRecord(res.json)
 }
 
+/** Which of the permissions we need are absent from a /me/permissions answer. */
+export function missingFacebookPermissions(body: unknown): string[] {
+  const rows = Array.isArray(asRecord(body).data) ? (asRecord(body).data as unknown[]) : []
+  const granted = new Set<string>()
+  for (const row of rows) {
+    const r = asRecord(row)
+    const name = asString(r.permission)
+    if (name && asString(r.status) === 'granted') granted.add(name)
+  }
+  return FB_SCOPES.filter((scope) => !granted.has(scope))
+}
+
 export async function completeFacebookLogin(creds: AppCredentials, redirectUri: string, code: string): Promise<LoginResult> {
   const short = await requestJson(
     `${GRAPH}/oauth/access_token?${new URLSearchParams({
@@ -103,7 +115,12 @@ export async function completeFacebookLogin(creds: AppCredentials, redirectUri: 
     })
     pageTokens[id] = token
   }
-  return { pages, pageTokens, accessToken: longToken, refreshToken: null, tokenExpiresAt: null, refreshExpiresAt: null }
+  // A "Facebook Login for Business" app ignores the permission list we send and grants only what its
+  // saved configuration holds, so a sign-in can succeed yet carry no right to post or read. Ask what
+  // was really granted rather than finding out on the first post.
+  const permissions = await graphGet('/me/permissions', longToken).catch(() => null)
+  const missingPermissions = permissions ? missingFacebookPermissions(permissions) : []
+  return { pages, pageTokens, accessToken: longToken, refreshToken: null, tokenExpiresAt: null, refreshExpiresAt: null, missingPermissions }
 }
 
 function messageWithLink(input: PublishInput): string {

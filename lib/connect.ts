@@ -11,6 +11,12 @@ export async function completeConnection(provider: Provider, code: string, userI
 
   if (provider === 'facebook') {
     const login = await completeFacebookLogin(creds, redirect, code)
+    if (login.missingPermissions && login.missingPermissions.length > 0) {
+      throw new SocialError(
+        `Facebook signed you in but did not grant: ${login.missingPermissions.join(', ')}. ` +
+          'If your Facebook app uses Facebook Login for Business, create a Configuration containing those permissions (Facebook Login for Business → Configurations), paste its Configuration ID into the Facebook setup tab, save, and connect again.',
+      )
+    }
     for (const page of login.pages) {
       await upsertConnection({
         provider,

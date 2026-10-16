@@ -41,4 +41,6 @@ export type LoginResult = {
   refreshToken: string | null
   tokenExpiresAt: Date | null
   refreshExpiresAt: Date | null
+  /** Permissions we asked for that the person did not end up granting. Empty for LinkedIn. */
+  missingPermissions?: string[]
 }

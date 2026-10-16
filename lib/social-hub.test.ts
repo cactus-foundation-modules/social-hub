@@ -4,7 +4,7 @@ import { decodeEntities, parsePreview, readMetaTags } from '@/modules/social-hub
 import { firstUrl, proxiedImage } from '@/modules/social-hub/lib/urls'
 import { checkPost, PostInput, type PostInputData } from '@/modules/social-hub/lib/rules'
 import { isPrivateAddress } from '@/modules/social-hub/lib/safe-fetch'
-import { parseFacebookPost, facebookAuthUrl, graphError } from '@/modules/social-hub/lib/facebook'
+import { parseFacebookPost, facebookAuthUrl, graphError, missingFacebookPermissions } from '@/modules/social-hub/lib/facebook'
 import { imageUrnsOf, linkedInAuthUrl, linkedInError, parseLinkedInPost, readLinkedInText } from '@/modules/social-hub/lib/linkedin'
 import { callbackUrl, requestOrigin } from '@/modules/social-hub/lib/origin'
 import { relativeTime, toLocalInput } from '@/modules/social-hub/components/admin/hub/format'
@@ -130,6 +130,11 @@ describe('facebook', () => {
   it('turns token errors into a reconnect message', () => {
     expect(graphError({ error: { code: 190, message: 'x' } }, 400).authFailure).toBe(true)
     expect(graphError({ error: { code: 100, message: 'bad param' } }, 400).message).toBe('bad param')
+  })
+  it('finds permissions the sign-in did not grant', () => {
+    expect(missingFacebookPermissions({ data: [{ permission: 'pages_show_list', status: 'granted' }, { permission: 'pages_manage_posts', status: 'declined' }] }))
+      .toEqual(['pages_read_engagement', 'pages_manage_posts'])
+    expect(missingFacebookPermissions({ data: ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts'].map((permission) => ({ permission, status: 'granted' })) })).toEqual([])
   })
   it('builds a login address with scopes or a configuration', () => {
     const plain = facebookAuthUrl({ clientId: 'A', clientSecret: 's', configId: null }, 'https://s.test/cb', 'st')

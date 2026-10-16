@@ -2,6 +2,10 @@
 
 const FAQ: { q: string; a: string }[] = [
   {
+    q: 'Facebook says it requires the pages_read_engagement permission.',
+    a: 'Your Facebook app uses Facebook Login for Business, which only grants the permissions in a saved configuration. In the Facebook app open Facebook Login for Business → Configurations, create one with pages_show_list, pages_read_engagement and pages_manage_posts (login variation General, User access token), paste its Configuration ID into the Facebook setup tab, save, then press Reconnect on the Accounts tab. The Testing and App Review screens in the Facebook dashboard are not needed for pages you administer yourself.',
+  },
+  {
     q: 'Facebook says "This is an invalid redirect URI for this application".',
     a: 'The redirect address is not saved in your Facebook app. In Facebook Login for Business → Settings, paste the address from the Facebook setup tab into Valid OAuth Redirect URIs, press Enter so it becomes a tag, press Save changes, then reload the page and run Check URI in the validator at the top. It must say the address is valid.',
   },
