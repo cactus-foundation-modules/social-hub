@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAdminPath } from '@/components/admin/AdminPathContext'
 import { useAdminConfirm } from '@/components/admin/useAdminConfirm'
 import { useTabParam } from '@/components/admin/useTabParam'
-import type { Connection, Post, PostStatus, RemotePost } from '@/modules/social-hub/lib/types'
+import { PROVIDER_LABEL, type Connection, type Post, type PostStatus, type RemotePost } from '@/modules/social-hub/lib/types'
 import { api } from '@/modules/social-hub/components/admin/hub/api'
+import { Masonry } from '@/modules/social-hub/components/admin/hub/Masonry'
 import { Composer } from '@/modules/social-hub/components/admin/hub/Composer'
 import { Avatar } from '@/modules/social-hub/components/admin/hub/Parts'
 import { LocalPostRow, RemotePostRow } from '@/modules/social-hub/components/admin/hub/PostCards'
@@ -101,8 +102,31 @@ export default function SocialHubApp() {
     await Promise.all([loadMeta(), loadList(view, filter)])
   }
 
+  async function removeRemote(post: RemotePost) {
+    const network = PROVIDER_LABEL[post.provider]
+    const ok = await askConfirm({
+      title: `Delete this post from ${network}?`,
+      message: `It will be removed from ${post.connectionName} for everyone, along with its reactions and comments. This cannot be undone.`,
+    })
+    if (!ok) return
+    const key = `${post.connectionId}:${post.externalId}`
+    setBusyId(key)
+    const res = await api<{ outcome: 'deleted' | 'gone' }>('/admin/remote-posts', {
+      method: 'DELETE',
+      body: { connectionId: post.connectionId, externalId: post.externalId },
+    })
+    setBusyId(null)
+    if (!res.ok) setError(res.error)
+    else {
+      setError('')
+      setNotice(res.data.outcome === 'gone' ? `It was already gone from ${network}. Removed from this list.` : `Deleted from ${network}.`)
+    }
+    await Promise.all([loadMeta(), loadList(view, filter)])
+  }
+
   const connections = meta?.connections ?? []
   const stale = connections.filter((c) => c.status === 'needs_reauth')
+  const partial = connections.filter((c) => c.status === 'active' && c.readNotice)
   const counts = meta?.counts
   const attention = (counts?.failed ?? 0) + (counts?.partial ?? 0)
   const canPost = meta?.can.canPost ?? false
@@ -145,6 +169,13 @@ export default function SocialHubApp() {
           </span>
         </div>
       )}
+
+      {partial.map((c) => (
+        <div className="shub-banner" role="alert" key={c.id}>
+          <Icon name="warn" size={16} />
+          <span><strong>{c.name}:</strong> {c.readNotice}{' '}{meta?.can.canManage && <a href={settingsHref}>Open settings</a>}</span>
+        </div>
+      ))}
 
       {meta && !hasPages ? (
         <div className="shub-group">
@@ -195,9 +226,15 @@ export default function SocialHubApp() {
                 <p>Posts already on your pages appear here after the first refresh. Press the refresh button to read them now.</p>
               </div></div>
             ) : (
-              <div className="shub-group">
-                {feed.map((p) => <RemotePostRow key={`${p.connectionId}:${p.externalId}`} post={p} connection={connections.find((c) => c.id === p.connectionId)} />)}
-              </div>
+              <Masonry>
+                {feed.map((p) => <RemotePostRow
+                  key={`${p.connectionId}:${p.externalId}`}
+                  post={p}
+                  connection={connections.find((c) => c.id === p.connectionId)}
+                  busy={busyId === `${p.connectionId}:${p.externalId}`}
+                  onDelete={canPost ? removeRemote : undefined}
+                />)}
+              </Masonry>
             )
           ) : local.length === 0 && !loading ? (
             <div className="shub-group"><div className="shub-empty">
@@ -211,7 +248,7 @@ export default function SocialHubApp() {
               </p>
             </div></div>
           ) : (
-            <div className="shub-group">
+            <Masonry>
               {local.map((p) => (
                 <LocalPostRow
                   key={p.id}
@@ -223,7 +260,7 @@ export default function SocialHubApp() {
                   onDelete={(post) => void remove(post)}
                 />
               ))}
-            </div>
+            </Masonry>
           )}
         </>
       )}

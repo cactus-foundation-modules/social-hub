@@ -1,7 +1,7 @@
 import { absoluteUrl } from '@/modules/social-hub/lib/media-url'
 import { asNumber, asRecord, asString, formBody, requestJson } from '@/modules/social-hub/lib/http'
 import type { AppCredentials } from '@/modules/social-hub/lib/settings'
-import type { LoginResult, PublishInput, PublishResult, RemotePostInput } from '@/modules/social-hub/lib/provider-types'
+import type { LoginResult, PublishInput, PublishResult, RemotePostInput, RemoteRead } from '@/modules/social-hub/lib/provider-types'
 import { SocialError } from '@/modules/social-hub/lib/types'
 
 export const FB_GRAPH_VERSION = 'v24.0'
@@ -178,11 +178,32 @@ export async function publishToFacebook(pageId: string, token: string, input: Pu
   return { externalId, permalink }
 }
 
-const POST_FIELDS = [
-  'id', 'message', 'created_time', 'permalink_url', 'full_picture', 'shares',
-  'attachments{media_type,type,url,title,media{image{src}},subattachments{media{image{src}}}}',
-  'likes.limit(0).summary(true)', 'comments.limit(0).summary(true)',
-].join(',')
+const ATTACHMENT_FIELDS = 'attachments{media_type,type,url,title,media{image{src}},subattachments{media{image{src}}}}'
+
+/**
+ * What to ask for, richest first. A token can be allowed the posts and refused the
+ * extras (counts, attachments), and the extras differ in what they need, so each step
+ * drops the most demanding thing still left. `link` is a plain field and is what tells
+ * us which web address a picture post was sharing, which is how a blog post is
+ * recognised on the page - so it is kept in every step but the last resort.
+ */
+const FIELD_STEPS = [
+  ['id', 'message', 'created_time', 'permalink_url', 'full_picture', 'shares', 'link', ATTACHMENT_FIELDS, 'likes.limit(0).summary(true)', 'comments.limit(0).summary(true)'].join(','),
+  ['id', 'message', 'created_time', 'permalink_url', 'full_picture', 'link', ATTACHMENT_FIELDS].join(','),
+  'id,message,created_time,permalink_url,full_picture,link',
+  'id,message,created_time,permalink_url,full_picture',
+]
+
+/** A picture post's `link` can be its own photo page on Facebook; only an address elsewhere says what was shared. */
+function externalLink(link: string | null): string | null {
+  if (!link) return null
+  try {
+    const host = new URL(link).hostname.toLowerCase()
+    return host === 'facebook.com' || host.endsWith('.facebook.com') || host === 'fb.com' || host === 'fb.me' ? null : link
+  } catch {
+    return null
+  }
+}
 
 export function parseFacebookPost(raw: unknown): RemotePostInput | null {
   const row = asRecord(raw)
@@ -207,7 +228,7 @@ export function parseFacebookPost(raw: unknown): RemotePostInput | null {
     message: asString(row.message) ?? '',
     permalink: rawLink ? (rawLink.startsWith('http') ? rawLink : `https://www.facebook.com${rawLink}`) : null,
     imageUrls: images.slice(0, 6),
-    linkUrl: isLink ? asString(attachment.url) : null,
+    linkUrl: isLink ? asString(attachment.url) : externalLink(asString(row.link)),
     linkTitle: isLink ? asString(attachment.title) : null,
     postedAt: created ? new Date(created) : null,
     likeCount: asNumber(asRecord(asRecord(row.likes).summary).total_count),
@@ -216,29 +237,93 @@ export function parseFacebookPost(raw: unknown): RemotePostInput | null {
   }
 }
 
-/** Just the post itself: no counts, no attachments. Needs the least from the token. */
-const BASIC_POST_FIELDS = 'id,message,created_time,permalink_url,full_picture'
-
 export function isPermissionError(err: unknown): boolean {
   return err instanceof SocialError && !err.authFailure && err.code !== null && (err.code === 10 || (err.code >= 200 && err.code < 300))
 }
 
-export async function fetchFacebookPosts(pageId: string, token: string): Promise<RemotePostInput[]> {
-  let res: Record<string, unknown>
-  try {
-    res = await graphGet(`/${pageId}/published_posts`, token, { fields: POST_FIELDS, limit: '25' })
-  } catch (err) {
-    // The extras (likes, comments, attachments) can need more than the bare posts do. Show the posts
-    // without them rather than nothing at all; if even that is refused the original error stands.
-    if (!isPermissionError(err)) throw err
-    try {
-      res = await graphGet(`/${pageId}/published_posts`, token, { fields: BASIC_POST_FIELDS, limit: '25' })
-    } catch {
-      throw err
-    }
+/**
+ * Take a post off the Page. Answers 'gone' when Facebook says it was already deleted
+ * (someone removed it on Facebook itself), which is the outcome the caller wanted anyway.
+ */
+export async function deleteFacebookPost(token: string, externalId: string): Promise<'deleted' | 'gone'> {
+  const res = await requestJson(`${GRAPH}/${encodeURIComponent(externalId)}`, {
+    method: 'DELETE',
+    headers: { authorization: `Bearer ${token}` },
+  })
+  if (res.ok && asRecord(res.json).success !== false) return 'deleted'
+  const err = asRecord(asRecord(res.json).error)
+  // 100 with subcode 33: the object does not exist (or is not visible to this token any more).
+  if (res.status === 404 || (asNumber(err.code) === 100 && asNumber(err.error_subcode) === 33)) return 'gone'
+  throw graphError(res.json, res.status)
+}
+
+const FACEBOOK_PAGE = 25
+const FACEBOOK_PAGES_MAX = 8
+
+/** The most posts one read of a Facebook page returns; fewer than this means the whole page was read. */
+export const FACEBOOK_READ_CAP = FACEBOOK_PAGE * FACEBOOK_PAGES_MAX
+
+/** What each step down from the richest request costs the owner, said in their terms. */
+const STEP_LOSS = [
+  null,
+  'like, comment and share counts',
+  'like, comment and share counts, and the details of any link a post shares',
+  'like, comment and share counts, the details of link posts, and the address a post links to (so Gazette posts cannot be matched to it)',
+]
+
+function readNotice(step: number, reason: string | null, stoppedEarly: string | null): string | null {
+  const parts: string[] = []
+  const loss = STEP_LOSS[step]
+  if (loss) {
+    parts.push(
+      `Facebook would not share ${loss}.${reason ? ` Facebook said: ${reason}` : ''} Reconnect this page and tick every permission Facebook offers; if that does not help, check the app's permissions (pages_read_engagement) on Facebook's developer site.`,
+    )
   }
-  const rows = Array.isArray(res.data) ? res.data : []
-  return rows.map(parseFacebookPost).filter((p): p is RemotePostInput => p !== null)
+  if (stoppedEarly) parts.push(`Older posts could not be read: ${stoppedEarly}`)
+  return parts.length ? parts.join(' ') : null
+}
+
+export async function fetchFacebookPosts(pageId: string, token: string): Promise<RemoteRead> {
+  const posts: RemotePostInput[] = []
+  let step = 0
+  let used = 0
+  let reason: string | null = null
+  let stoppedEarly: string | null = null
+  let after: string | undefined
+  for (let page = 0; page < FACEBOOK_PAGES_MAX; page++) {
+    let res: Record<string, unknown> | null = null
+    let lastError: unknown = null
+    // Only the first page looks for the richest request this token is allowed; later pages
+    // must use the same one, or one read would mix posts with and without their links.
+    const last = page === 0 ? FIELD_STEPS.length - 1 : step
+    for (; step <= last; step++) {
+      try {
+        res = await graphGet(`/${pageId}/published_posts`, token, {
+          fields: FIELD_STEPS[step]!,
+          limit: String(FACEBOOK_PAGE),
+          ...(after ? { after } : {}),
+        })
+        used = step
+        break
+      } catch (err) {
+        // A refusal of the extras steps down; a sign-in problem or anything else stands.
+        if (!(err instanceof SocialError) || err.authFailure) throw err
+        lastError = err
+        if (page === 0 && step === 0) reason = err.message
+      }
+    }
+    if (!res) {
+      // Nothing worked on the first page: that is the real error. Later on, keep what was read.
+      if (page === 0) throw lastError
+      stoppedEarly = lastError instanceof SocialError ? lastError.message : 'Facebook stopped answering.'
+      break
+    }
+    const rows = Array.isArray(res.data) ? res.data : []
+    posts.push(...rows.map(parseFacebookPost).filter((p): p is RemotePostInput => p !== null))
+    after = asString(asRecord(asRecord(res.paging).cursors).after) ?? undefined
+    if (rows.length < FACEBOOK_PAGE || !asString(asRecord(res.paging).next) || !after) break
+  }
+  return { posts, notice: readNotice(used, reason, stoppedEarly) }
 }
 
 /** Plain-English summary of Facebook's debug_token answer: what this token can really do. */

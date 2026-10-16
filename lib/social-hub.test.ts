@@ -20,7 +20,7 @@ vi.mock('@/lib/crypto/secrets', () => {
 
 const conn = (over: Partial<Connection> = {}): Connection => ({
   id: 'c1', provider: 'facebook', externalId: '1', name: 'Page', pictureUrl: null, profileUrl: null,
-  status: 'active', lastError: null, lastSyncedAt: null, tokenExpiresAt: null, createdAt: '2026-01-01T00:00:00Z', ...over,
+  status: 'active', lastError: null, readNotice: null, lastSyncedAt: null, tokenExpiresAt: null, createdAt: '2026-01-01T00:00:00Z', ...over,
 })
 
 const base: PostInputData = { body: 'Hello', images: [], connectionIds: ['c1'], mode: 'now' }
@@ -212,5 +212,18 @@ describe('formatting', () => {
   })
   it('formats a datetime-local value', () => {
     expect(toLocalInput(new Date(2026, 9, 5, 9, 7))).toBe('2026-10-05T09:07')
+  })
+})
+
+describe('Facebook picture posts and the address they share', () => {
+  const base = { id: '1_2', message: 'hi', created_time: '2026-09-08T08:57:04+0000', permalink_url: '/1/posts/2' }
+  it('takes the plain link field when it points at another site', () => {
+    expect(parseFacebookPost({ ...base, link: 'https://deskwell.co.uk/a-post' })?.linkUrl).toBe('https://deskwell.co.uk/a-post')
+  })
+  it('ignores a link that is only the post\'s own page on Facebook', () => {
+    expect(parseFacebookPost({ ...base, link: 'https://www.facebook.com/photo.php?fbid=1' })?.linkUrl).toBeNull()
+  })
+  it('has no link when Facebook gave none', () => {
+    expect(parseFacebookPost(base)?.linkUrl).toBeNull()
   })
 })

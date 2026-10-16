@@ -3,7 +3,7 @@ import { asNumber, asRecord, asString, formBody, requestJson } from '@/modules/s
 import { escapeLinkedInText } from '@/modules/social-hub/lib/linkedin-text'
 import { readCapped, safeGet } from '@/modules/social-hub/lib/safe-fetch'
 import type { AppCredentials } from '@/modules/social-hub/lib/settings'
-import type { LoginResult, PublishInput, PublishResult, RemotePostInput } from '@/modules/social-hub/lib/provider-types'
+import type { LoginResult, PublishInput, PublishResult, RemotePostInput, RemoteRead } from '@/modules/social-hub/lib/provider-types'
 import { SocialError } from '@/modules/social-hub/lib/types'
 
 /** LinkedIn versions its REST API by month and retires old ones after about a year. */
@@ -306,11 +306,39 @@ async function socialCounts(urn: string, token: string): Promise<{ likes: number
   }
 }
 
-export async function fetchLinkedInPosts(orgId: string, token: string): Promise<RemotePostInput[]> {
+/** Take a post off the page. 'gone' when LinkedIn says it no longer exists. */
+export async function deleteLinkedInPost(token: string, urn: string): Promise<'deleted' | 'gone'> {
+  const res = await requestJson(`${API}/posts/${encodeURIComponent(urn)}`, {
+    method: 'DELETE',
+    headers: apiHeaders(token, { 'x-restli-method': 'DELETE' }),
+  })
+  if (res.ok) return 'deleted'
+  if (res.status === 404) return 'gone'
+  throw linkedInError(res.json, res.status)
+}
+
+const LINKEDIN_PAGE = 20
+const LINKEDIN_PAGES_MAX = 5
+
+/** The most posts one read of a LinkedIn page returns; fewer than this means the whole page was read. */
+export const LINKEDIN_READ_CAP = LINKEDIN_PAGE * LINKEDIN_PAGES_MAX
+
+export async function fetchLinkedInPosts(orgId: string, token: string): Promise<RemoteRead> {
   const author = encodeURIComponent(`urn:li:organization:${orgId}`)
-  const res = await apiGet(`/posts?author=${author}&q=author&count=20&sortBy=LAST_MODIFIED`, token)
-  if (!res.ok) throw linkedInError(res.json, res.status)
-  const elements = Array.isArray(asRecord(res.json).elements) ? (asRecord(res.json).elements as unknown[]) : []
+  const elements: unknown[] = []
+  let stoppedEarly: string | null = null
+  for (let page = 0; page < LINKEDIN_PAGES_MAX; page++) {
+    const res = await apiGet(`/posts?author=${author}&q=author&count=${LINKEDIN_PAGE}&start=${page * LINKEDIN_PAGE}&sortBy=LAST_MODIFIED`, token)
+    if (!res.ok) {
+      // The first page failing is the real error; a later one failing just ends the read.
+      if (page === 0) throw linkedInError(res.json, res.status)
+      stoppedEarly = linkedInError(res.json, res.status).message
+      break
+    }
+    const got = Array.isArray(asRecord(res.json).elements) ? (asRecord(res.json).elements as unknown[]) : []
+    elements.push(...got)
+    if (got.length < LINKEDIN_PAGE) break
+  }
   const rows: { post: RemotePostInput; urns: string[] }[] = []
   for (const element of elements) {
     const post = parseLinkedInPost(element)
@@ -319,7 +347,7 @@ export async function fetchLinkedInPosts(orgId: string, token: string): Promise<
 
   const images = await resolveImages(rows.flatMap((r) => r.urns), token)
   const counts = await Promise.allSettled(rows.slice(0, 10).map((r) => socialCounts(r.post.externalId, token)))
-  return rows.map((r, i) => {
+  const posts = rows.map((r, i) => {
     const c = counts[i]
     const found = c && c.status === 'fulfilled' ? c.value : null
     return {
@@ -329,4 +357,11 @@ export async function fetchLinkedInPosts(orgId: string, token: string): Promise<
       commentCount: found?.comments ?? null,
     }
   })
+  const parts: string[] = []
+  // The counts are asked for the ten newest posts. None coming back at all means LinkedIn refused, not that there are none.
+  if (posts.length > 0 && posts.slice(0, 10).every((p) => p.likeCount === null && p.commentCount === null)) {
+    parts.push('LinkedIn would not share like and comment counts. Reconnect this page to grant them; if that does not help, check the app has the Community Management API approved.')
+  }
+  if (stoppedEarly) parts.push(`Older posts could not be read: ${stoppedEarly}`)
+  return { posts, notice: parts.length ? parts.join(' ') : null }
 }

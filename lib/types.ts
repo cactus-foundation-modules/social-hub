@@ -20,6 +20,8 @@ export type Connection = {
   profileUrl: string | null
   status: ConnectionStatus
   lastError: string | null
+  /** What the network would not share on the last read (links, counts), or null when it shared everything. */
+  readNotice: string | null
   lastSyncedAt: string | null
   tokenExpiresAt: string | null
   createdAt: string

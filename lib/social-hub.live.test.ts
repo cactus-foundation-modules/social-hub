@@ -58,6 +58,8 @@ describe.runIf(shouldRun)('Social Hub against a real database', () => {
   let settings: typeof import('./settings')
   let sync: typeof import('./sync')
   let publish: typeof import('./publish')
+  let remote: typeof import('./remote-delete')
+  let posted: typeof import('./posted-links')
   let applyFile: (file: string) => Promise<void>
   let fbId = ''
   let liId = ''
@@ -89,6 +91,8 @@ describe.runIf(shouldRun)('Social Hub against a real database', () => {
     settings = await import('./settings')
     sync = await import('./sync')
     publish = await import('./publish')
+    remote = await import('./remote-delete')
+    posted = await import('./posted-links')
 
     await conns.upsertConnection({
       provider: 'facebook', externalId: 'fbpage1', name: 'Deskwell Facebook', pictureUrl: null, profileUrl: 'https://facebook.com/x',
@@ -277,6 +281,58 @@ describe.runIf(shouldRun)('Social Hub against a real database', () => {
     expect(out.published).toBe(1)
     expect((await posts.getPost(due))?.status).toBe('published')
     expect((await posts.getPost(later))?.status).toBe('scheduled')
+    vi.unstubAllGlobals()
+  })
+
+  it('finds which web addresses were posted, through the networks\' wrapped links, and records what a read could not get', async () => {
+    const wrapped = 'https://l.facebook.com/l.php?u=' + encodeURIComponent('https://deskwell.co.uk/a-post?utm_source=facebook') + '&h=x'
+    await sync.storeRemotePosts(fbId, [{
+      externalId: 'link1', message: 'm', permalink: 'https://p/link1', imageUrls: [], linkUrl: wrapped, linkTitle: null,
+      postedAt: new Date('2026-10-06T10:00:00Z'), likeCount: null, commentCount: null, shareCount: null,
+    }], 25)
+    const sched = await posts.createPost({ body: 'Read https://www.deskwell.co.uk/another/', images: [], connectionIds: [fbId], mode: 'schedule', scheduledAt: '2030-02-01T09:00:00Z' }, 'u1')
+    const found = await posted.matchPostedLinks(['https://deskwell.co.uk/a-post', 'https://deskwell.co.uk/another', 'https://deskwell.co.uk/never'])
+    expect(found['https://deskwell.co.uk/a-post']!.facebook).toMatchObject([{ state: 'published', permalink: 'https://p/link1' }])
+    expect(found['https://deskwell.co.uk/another']!.facebook).toMatchObject([{ state: 'scheduled' }])
+    expect(found['https://deskwell.co.uk/never']).toEqual({ facebook: [], linkedin: [] })
+    await posts.deletePost(sched)
+
+    await conns.markSynced(fbId, 'Facebook would not share counts.')
+    expect((await conns.listConnections()).find((c) => c.id === fbId)?.readNotice).toBe('Facebook would not share counts.')
+    await conns.markSynced(fbId, null)
+    expect((await conns.listConnections()).find((c) => c.id === fbId)?.readNotice).toBeNull()
+  })
+
+  it('deletes a post from the network first, then forgets it here; a refusal changes nothing', async () => {
+    const mk = (id: string) => ({
+      externalId: id, message: `m ${id}`, permalink: `https://p/${id}`, imageUrls: [], linkUrl: null, linkTitle: null,
+      postedAt: new Date('2026-10-07T10:00:00Z'), likeCount: null, commentCount: null, shareCount: null,
+    })
+    await sync.storeRemotePosts(fbId, [mk('del1'), mk('del2')], 25)
+    const own = await posts.createPost({ body: 'del1', images: [], connectionIds: [fbId], mode: 'draft' }, 'u1')
+    await posts.finishTarget((await posts.getPost(own))!.targets[0]!.id, { ok: true, externalId: 'del1', permalink: null })
+
+    let refuse = false
+    const seen: string[] = []
+    vi.stubGlobal('fetch', vi.fn(async (input: string | URL, init?: RequestInit) => {
+      seen.push(`${init?.method ?? 'GET'} ${String(input)}`)
+      return refuse
+        ? new Response(JSON.stringify({ error: { code: 200, message: 'no permission' } }), { status: 403 })
+        : new Response(JSON.stringify({ success: true }), { status: 200 })
+    }))
+
+    await expect(remote.deleteRemotePost(fbId, 'never-listed')).rejects.toThrow(/not in the list/)
+    expect(seen).toEqual([])
+
+    refuse = true
+    await expect(remote.deleteRemotePost(fbId, 'del2')).rejects.toThrow(/permission/)
+    expect((await sync.listFeed(fbId)).some((p) => p.externalId === 'del2')).toBe(true)
+
+    refuse = false
+    expect(await remote.deleteRemotePost(fbId, 'del1')).toEqual({ outcome: 'deleted', provider: 'facebook' })
+    expect(seen.at(-1)).toMatch(/^DELETE .*graph\.facebook\.com.*del1/)
+    expect((await sync.listFeed(fbId)).some((p) => p.externalId === 'del1')).toBe(false)
+    expect(await posts.getPost(own)).toBeNull()
     vi.unstubAllGlobals()
   })
 

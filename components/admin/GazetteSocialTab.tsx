@@ -179,6 +179,11 @@ export function GazetteSocialTab({ posts }: { posts: SharablePost[] }) {
     <div>
       {error && <div className="alert alert-danger">{error}</div>}
       {notice && <div className="alert alert-success">{notice}</div>}
+      {(meta?.connections ?? []).filter((c) => c.status === 'active' && c.readNotice).map((c) => (
+        <div className="alert alert-warning" role="alert" key={c.id}>
+          <strong>{c.name}:</strong> {c.readNotice} Posts may show as not posted when they are.
+        </div>
+      ))}
 
       <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: '0.75rem' }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', fontSize: '0.8125rem' }}>

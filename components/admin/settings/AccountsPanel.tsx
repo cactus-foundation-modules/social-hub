@@ -61,6 +61,11 @@ function ConnectCard({ provider, connections, configured, onChanged, goTo }: {
               {c.lastError ? c.lastError : c.lastSyncedAt ? `Last read ${relativeTime(c.lastSyncedAt)}` : 'Not read yet'}
               {c.tokenExpiresAt && c.status === 'active' && ` · sign-in valid until ${new Date(c.tokenExpiresAt).toLocaleDateString()}`}
             </div>
+            {c.readNotice && c.status === 'active' && (
+              <div className="shub-acct-meta" role="alert" style={{ color: 'var(--color-warning-text, var(--color-text))', marginTop: '0.25rem' }}>
+                <strong>Not everything is being read.</strong> {c.readNotice}
+              </div>
+            )}
           </div>
           {c.profileUrl && <a className="btn btn-ghost btn-sm" href={c.profileUrl} target="_blank" rel="noreferrer noopener">Open</a>}
           <button type="button" className="btn btn-ghost btn-sm" disabled={busy === c.id} onClick={() => void disconnect(c)}>Disconnect</button>

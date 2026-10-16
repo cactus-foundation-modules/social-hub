@@ -11,6 +11,7 @@ type Row = {
   profile_url: string | null
   status: ConnectionStatus
   last_error: string | null
+  read_notice: string | null
   last_synced_at: Date | null
   token_expires_at: Date | null
   created_at: Date
@@ -28,6 +29,7 @@ function toConnection(r: Row): Connection {
     profileUrl: r.profile_url,
     status: r.status,
     lastError: r.last_error,
+    readNotice: r.read_notice,
     lastSyncedAt: iso(r.last_synced_at),
     tokenExpiresAt: iso(r.token_expires_at),
     createdAt: r.created_at.toISOString(),
@@ -37,7 +39,7 @@ function toConnection(r: Row): Connection {
 export async function listConnections(): Promise<Connection[]> {
   const rows = await prisma.$queryRaw<Row[]>`
     SELECT "id", "provider", "external_id", "name", "picture_url", "profile_url", "status",
-           "last_error", "last_synced_at", "token_expires_at", "created_at"
+           "last_error", "read_notice", "last_synced_at", "token_expires_at", "created_at"
     FROM "shub_connections" ORDER BY "provider", "name"
   `
   return rows.map(toConnection)
@@ -75,7 +77,7 @@ function safeDecrypt(value: string): string | null {
 export async function getConnectionWithSecrets(id: string): Promise<ConnectionSecrets | null> {
   const rows = await prisma.$queryRaw<SecretRow[]>`
     SELECT "id", "provider", "external_id", "name", "picture_url", "profile_url", "status",
-           "last_error", "last_synced_at", "token_expires_at", "created_at",
+           "last_error", "read_notice", "last_synced_at", "token_expires_at", "created_at",
            "access_token_enc", "refresh_token_enc", "refresh_expires_at"
     FROM "shub_connections" WHERE "id" = ${id}
   `
@@ -85,7 +87,7 @@ export async function getConnectionWithSecrets(id: string): Promise<ConnectionSe
 export async function listActiveWithSecrets(): Promise<ConnectionSecrets[]> {
   const rows = await prisma.$queryRaw<SecretRow[]>`
     SELECT "id", "provider", "external_id", "name", "picture_url", "profile_url", "status",
-           "last_error", "last_synced_at", "token_expires_at", "created_at",
+           "last_error", "read_notice", "last_synced_at", "token_expires_at", "created_at",
            "access_token_enc", "refresh_token_enc", "refresh_expires_at"
     FROM "shub_connections" WHERE "status" = 'active' ORDER BY "provider", "name"
   `
@@ -150,9 +152,10 @@ export async function noteConnectionError(id: string, message: string | null): P
   `
 }
 
-export async function markSynced(id: string): Promise<void> {
+export async function markSynced(id: string, notice: string | null): Promise<void> {
   await prisma.$executeRaw`
-    UPDATE "shub_connections" SET "last_synced_at" = CURRENT_TIMESTAMP, "last_error" = NULL WHERE "id" = ${id}
+    UPDATE "shub_connections" SET "last_synced_at" = CURRENT_TIMESTAMP, "last_error" = NULL,
+      "read_notice" = ${notice ? notice.slice(0, 600) : null} WHERE "id" = ${id}
   `
 }
 

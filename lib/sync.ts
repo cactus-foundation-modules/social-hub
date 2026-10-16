@@ -1,15 +1,15 @@
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 import { listActiveWithSecrets, markNeedsReauth, markSynced, noteConnectionError, type ConnectionSecrets } from '@/modules/social-hub/lib/connections'
-import { describeFacebookToken, fetchFacebookPosts, isPermissionError } from '@/modules/social-hub/lib/facebook'
-import { fetchLinkedInPosts } from '@/modules/social-hub/lib/linkedin'
+import { describeFacebookToken, fetchFacebookPosts, FACEBOOK_READ_CAP, isPermissionError } from '@/modules/social-hub/lib/facebook'
+import { fetchLinkedInPosts, LINKEDIN_READ_CAP } from '@/modules/social-hub/lib/linkedin'
 import type { RemotePostInput } from '@/modules/social-hub/lib/provider-types'
 import { getAppCredentials } from '@/modules/social-hub/lib/settings'
 import { usableToken } from '@/modules/social-hub/lib/tokens'
 import { syncAttentionAlert } from '@/modules/social-hub/lib/alerts'
 import { SocialError, type Connection, type RemotePost } from '@/modules/social-hub/lib/types'
 
-const FETCH_SIZE = { facebook: 25, linkedin: 20 } as const
+const FETCH_SIZE = { facebook: FACEBOOK_READ_CAP, linkedin: LINKEDIN_READ_CAP } as const
 
 export async function storeRemotePosts(connectionId: string, posts: RemotePostInput[], pageSize: number): Promise<void> {
   for (const p of posts) {
@@ -49,18 +49,18 @@ export async function storeRemotePosts(connectionId: string, posts: RemotePostIn
   `
 }
 
-export type SyncOutcome = { connectionId: string; ok: boolean; error?: string; count?: number }
+export type SyncOutcome = { connectionId: string; ok: boolean; error?: string; count?: number; notice?: string }
 
 export async function syncConnection(conn: ConnectionSecrets): Promise<SyncOutcome> {
   try {
     const token = await usableToken(conn)
     const size = FETCH_SIZE[conn.provider]
-    const posts = conn.provider === 'facebook'
+    const { posts, notice } = conn.provider === 'facebook'
       ? await fetchFacebookPosts(conn.externalId, token)
       : await fetchLinkedInPosts(conn.externalId, token)
     await storeRemotePosts(conn.id, posts, size)
-    await markSynced(conn.id)
-    return { connectionId: conn.id, ok: true, count: posts.length }
+    await markSynced(conn.id, notice)
+    return { connectionId: conn.id, ok: true, count: posts.length, notice: notice ?? undefined }
   } catch (err) {
     let message = err instanceof SocialError ? err.message : 'Reading this page failed unexpectedly.'
     if (conn.provider === 'facebook' && isPermissionError(err) && conn.accessToken) {

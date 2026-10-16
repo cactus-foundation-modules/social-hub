@@ -26,6 +26,9 @@ export type RemotePostInput = {
   shareCount: number | null
 }
 
+/** A read of a page: the posts, plus anything the network refused to share that the owner should be told about. */
+export type RemoteRead = { posts: RemotePostInput[]; notice: string | null }
+
 export type DiscoveredPage = {
   externalId: string
   name: string

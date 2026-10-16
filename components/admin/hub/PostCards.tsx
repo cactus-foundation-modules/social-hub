@@ -1,11 +1,19 @@
 'use client'
 
-import type { Connection, Post, RemotePost } from '@/modules/social-hub/lib/types'
+import { PROVIDER_LABEL, type Connection, type Post, type RemotePost } from '@/modules/social-hub/lib/types'
 import { Avatar, LinkCard, MediaGrid, PostText, StatusPill, ViewLink } from '@/modules/social-hub/components/admin/hub/Parts'
 import { fullDateTime, relativeTime } from '@/modules/social-hub/components/admin/hub/format'
 import { Icon } from '@/modules/social-hub/components/admin/hub/Glyphs'
 
-export function RemotePostRow({ post, connection }: { post: RemotePost; connection: Connection | undefined }) {
+export function RemotePostRow({
+  post, connection, busy, onDelete,
+}: {
+  post: RemotePost
+  connection: Connection | undefined
+  busy?: boolean
+  /** Present only for someone allowed to delete; leaves the button out otherwise. */
+  onDelete?: (post: RemotePost) => void
+}) {
   const stats: { icon: 'like' | 'comment' | 'share'; n: number | null; label: string }[] = [
     { icon: 'like', n: post.likeCount, label: 'reactions' },
     { icon: 'comment', n: post.commentCount, label: 'comments' },
@@ -30,6 +38,13 @@ export function RemotePostRow({ post, connection }: { post: RemotePost; connecti
         ))}
         <span className="shub-post-links"><ViewLink href={post.permalink} provider={post.provider} /></span>
       </div>
+      {onDelete && (
+        <div className="shub-row-actions">
+          <button type="button" className="shub-pill shub-pill--small shub-pill--danger" disabled={busy} onClick={() => onDelete(post)}>
+            <Icon name="trash" size={13} /> Delete from {PROVIDER_LABEL[post.provider]}
+          </button>
+        </div>
+      )}
     </article>
   )
 }

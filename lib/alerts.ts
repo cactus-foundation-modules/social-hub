@@ -12,6 +12,8 @@ export async function syncAttentionAlert(): Promise<void> {
     const parts: string[] = []
     if (failed > 0) parts.push(`${failed} post${failed === 1 ? '' : 's'} did not go out`)
     if (stale > 0) parts.push(`${stale} page${stale === 1 ? '' : 's'} need${stale === 1 ? 's' : ''} reconnecting`)
+    const partial = connections.filter((c) => c.status === 'active' && c.readNotice).length
+    if (partial > 0) parts.push(`${partial} page${partial === 1 ? ' is' : 's are'} not sharing everything`)
     if (parts.length === 0) {
       await clearAlert(KEY)
       return
