@@ -17,6 +17,33 @@ export type LinkHit = {
 
 export type LinkMatches = Record<string, Record<Provider, LinkHit[]>>
 
+// The networks wrap outbound links in their own click-tracking redirect, and that
+// wrapped form is what their APIs hand back for a link card. The real address is in
+// a query parameter.
+const REDIRECTORS: Array<{ host: RegExp; param: string }> = [
+  { host: /^(l|lm|m)\.facebook\.com$/, param: 'u' },
+  { host: /^l\.instagram\.com$/, param: 'u' },
+  { host: /^(www\.)?linkedin\.com$/, param: 'url' },
+  { host: /^(www\.)?google\.[a-z.]+$/, param: 'q' },
+]
+
+function unwrapRedirect(url: URL): URL | null {
+  for (const r of REDIRECTORS) {
+    if (!r.host.test(url.hostname.toLowerCase())) continue
+    if (r.param === 'url' && !url.pathname.startsWith('/redir')) continue
+    if (r.param === 'q' && url.pathname !== '/url') continue
+    if (r.param === 'u' && !url.pathname.startsWith('/l.php') && url.hostname.toLowerCase() !== 'l.instagram.com') continue
+    const target = url.searchParams.get(r.param)
+    if (!target) return null
+    try {
+      return new URL(target)
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 /**
  * A comparable form of a web address: no scheme, no "www.", no query or fragment,
  * no trailing slash, lower-cased. Tracking tags and "http" versus "https" are noise
@@ -30,6 +57,13 @@ export function normaliseLink(raw: string): string | null {
     return null
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return null
+  // A wrapped link is the address inside it. Bounded, so a redirect pointing at a redirect cannot loop.
+  for (let hops = 0; hops < 3; hops++) {
+    const inner = unwrapRedirect(url)
+    if (!inner) break
+    if (inner.protocol !== 'http:' && inner.protocol !== 'https:') return null
+    url = inner
+  }
   const host = url.hostname.toLowerCase().replace(/^www\./, '')
   const path = url.pathname.replace(/\/+$/, '')
   return `${host}${path}`.toLowerCase()

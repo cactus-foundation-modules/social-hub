@@ -15,6 +15,16 @@ describe('normaliseLink', () => {
   it('keeps different posts different', () => {
     expect(normaliseLink('https://a.com/one')).not.toBe(normaliseLink('https://a.com/one-more'))
   })
+  it('sees through the networks\' click-tracking wrappers', () => {
+    const want = 'deskwell.co.uk/bench-desks'
+    const inner = encodeURIComponent('https://deskwell.co.uk/bench-desks?utm_source=facebook&fbclid=abc')
+    expect(normaliseLink(`https://l.facebook.com/l.php?u=${inner}&h=AUD&__tn__=%2CmH-R&c[0]=AUC5`)).toBe(want)
+    expect(normaliseLink(`https://l.instagram.com/?u=${inner}&e=x`)).toBe(want)
+    expect(normaliseLink(`https://www.linkedin.com/redir/redirect?url=${inner}&urlhash=x`)).toBe(want)
+  })
+  it('leaves an ordinary Facebook or LinkedIn address alone', () => {
+    expect(normaliseLink('https://www.facebook.com/page/posts/123')).toBe('facebook.com/page/posts/123')
+  })
   it('refuses anything that is not a web address', () => {
     expect(normaliseLink('not a url')).toBeNull()
     expect(normaliseLink('mailto:a@b.com')).toBeNull()
