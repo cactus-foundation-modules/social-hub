@@ -60,6 +60,7 @@ export function FacebookPanel({ settings, draft, onChange }: Props) {
             <ul>
               <li><Code>pages_show_list</Code> (already there by default)</li>
               <li><Code>pages_read_engagement</Code> - lets us read your existing posts and their likes and comments</li>
+              <li><Code>pages_read_user_content</Code> - lets us read the likes, reactions and comment counts on your posts</li>
               <li><Code>pages_manage_posts</Code> - lets us publish and schedule posts</li>
             </ul>
           </li>
@@ -83,7 +84,7 @@ export function FacebookPanel({ settings, draft, onChange }: Props) {
             <strong>If your app uses Facebook Login for Business, create a login configuration.</strong> You will know: it is in the app&apos;s left-hand menu. Such apps ignore the permissions Social Hub asks for and
             grant only what a saved configuration lists - without one, connecting appears to work but Facebook then refuses to let us read or publish posts
             (&ldquo;requires the pages_read_engagement permission&rdquo;). Open <strong>Facebook Login for Business → Configurations → Create configuration</strong>, choose the
-            <strong> General</strong> login variation and a <strong>User access token</strong>, add all three permissions above, then copy the <strong>Configuration ID</strong> into the optional box on this page and save.
+            <strong> General</strong> login variation and a <strong>User access token</strong>, add all four permissions above, then copy the <strong>Configuration ID</strong> into the optional box on this page and save.
             An older app with plain <strong>Facebook Login</strong> does not need this.
           </li>
           <li>

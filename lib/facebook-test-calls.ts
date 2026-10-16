@@ -31,21 +31,21 @@ export async function runFacebookTestCalls(pageId: string, token: string): Promi
   const results: TestCallResult[] = []
 
   // One field at a time, so a refusal names the field Facebook objects to rather than the whole request.
-  const probes: Array<[string, string]> = [
-    ['id,message,created_time', 'Read the page\'s posts'],
+  const probes: Array<[string, string, string?]> = [
+    ['message,created_time', 'Read the page\'s posts'],
     ['shares', 'Read share counts'],
-    ['reactions.limit(0).summary(true)', 'Read reaction counts'],
-    ['likes.limit(0).summary(true)', 'Read like counts'],
-    ['comments.limit(0).summary(true)', 'Read comment counts'],
+    ['reactions.limit(0).summary(true)', 'Read reaction counts', 'pages_read_user_content'],
+    ['likes.limit(0).summary(true)', 'Read like counts', 'pages_read_user_content'],
+    ['comments.limit(0).summary(true)', 'Read comment counts', 'pages_read_user_content'],
   ]
-  for (const [fields, what] of probes) {
+  for (const [fields, what, permission = 'pages_read_engagement'] of probes) {
     try {
       const query = new URLSearchParams({ fields: `id,${fields}`, limit: '1' })
       const res = await requestJson(`${GRAPH}/${encodeURIComponent(pageId)}/published_posts?${query.toString()}`, { headers })
       if (!res.ok) throw graphError(res.json, res.status)
-      results.push({ permission: 'pages_read_engagement', what, ok: true, detail: 'Facebook answered.' })
+      results.push({ permission, what, ok: true, detail: 'Facebook answered.' })
     } catch (err) {
-      results.push(failure('pages_read_engagement', what, err))
+      results.push(failure(permission, what, err))
     }
   }
 

@@ -7,8 +7,8 @@ import { SocialError } from '@/modules/social-hub/lib/types'
 export const FB_GRAPH_VERSION = 'v24.0'
 const GRAPH = `https://graph.facebook.com/${FB_GRAPH_VERSION}`
 
-/** What we ask Facebook for. Publishing needs the first three; reading likes and comments needs engagement. */
-export const FB_SCOPES = ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts'] as const
+/** What we ask Facebook for. Publishing needs the first three; reading likes and comments needs engagement and user content. */
+export const FB_SCOPES = ['pages_show_list', 'pages_read_engagement', 'pages_read_user_content', 'pages_manage_posts'] as const
 
 export function facebookAuthUrl(creds: AppCredentials, redirectUri: string, state: string): string {
   const params = new URLSearchParams({
@@ -192,6 +192,7 @@ const ATTACHMENT_FIELDS = 'attachments{media_type,type,url,title,media{image{src
  */
 const FIELD_STEPS = [
   ['id', 'message', 'created_time', 'permalink_url', 'full_picture', 'shares', ATTACHMENT_FIELDS, 'likes.limit(0).summary(true)', 'comments.limit(0).summary(true)'].join(','),
+  ['id', 'message', 'created_time', 'permalink_url', 'full_picture', 'shares', ATTACHMENT_FIELDS].join(','),
   ['id', 'message', 'created_time', 'permalink_url', 'full_picture', ATTACHMENT_FIELDS].join(','),
   'id,message,created_time,permalink_url,full_picture',
 ]
@@ -268,6 +269,7 @@ export const FACEBOOK_READ_CAP = FACEBOOK_PAGE * FACEBOOK_PAGES_MAX
 /** What each step down from the richest request costs the owner, said in their terms. */
 const STEP_LOSS = [
   null,
+  'like and comment counts',
   'like, comment and share counts',
   'like, comment and share counts, the details of link posts, and the address a post links to (so Gazette posts cannot be matched to it)',
 ]

@@ -35,11 +35,13 @@ describe('reading a Facebook page', () => {
     const read = await fetchFacebookPosts('1', 't')
     expect(fieldsOf(1)).toContain('attachments')
     expect(fieldsOf(1)).not.toContain('likes')
-    expect(read.notice).toMatch(/like, comment and share counts/)
+    expect(fieldsOf(1)).toContain('shares')
+    expect(read.notice).toMatch(/like and comment counts/)
     expect(read.notice).toMatch(/Requires pages_read_engagement/)
   })
 
   it('warns that Gazette cannot be matched when only the bare post is allowed', async () => {
+    requestJson.mockResolvedValueOnce(refused('no'))
     requestJson.mockResolvedValueOnce(refused('no'))
     requestJson.mockResolvedValueOnce(refused('no'))
     requestJson.mockResolvedValueOnce(ok([post(1)]))

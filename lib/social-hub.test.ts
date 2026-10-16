@@ -133,8 +133,8 @@ describe('facebook', () => {
   })
   it('finds permissions the sign-in did not grant', () => {
     expect(missingFacebookPermissions({ data: [{ permission: 'pages_show_list', status: 'granted' }, { permission: 'pages_manage_posts', status: 'declined' }] }))
-      .toEqual(['pages_read_engagement', 'pages_manage_posts'])
-    expect(missingFacebookPermissions({ data: ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts'].map((permission) => ({ permission, status: 'granted' })) })).toEqual([])
+      .toEqual(['pages_read_engagement', 'pages_read_user_content', 'pages_manage_posts'])
+    expect(missingFacebookPermissions({ data: ['pages_show_list', 'pages_read_engagement', 'pages_read_user_content', 'pages_manage_posts'].map((permission) => ({ permission, status: 'granted' })) })).toEqual([])
   })
   it('describes a token and recognises permission refusals', () => {
     expect(formatTokenReport({ data: { type: 'PAGE', is_valid: true, scopes: ['pages_show_list'], granular_scopes: [{ scope: 'pages_read_engagement', target_ids: ['1'] }] } }))
@@ -146,7 +146,7 @@ describe('facebook', () => {
   })
   it('builds a login address with scopes or a configuration', () => {
     const plain = facebookAuthUrl({ clientId: 'A', clientSecret: 's', configId: null }, 'https://s.test/cb', 'st')
-    expect(plain).toContain('scope=pages_show_list%2Cpages_read_engagement%2Cpages_manage_posts')
+    expect(plain).toContain('scope=pages_show_list%2Cpages_read_engagement%2Cpages_read_user_content%2Cpages_manage_posts')
     const biz = facebookAuthUrl({ clientId: 'A', clientSecret: 's', configId: 'C1' }, 'https://s.test/cb', 'st')
     expect(biz).toContain('config_id=C1')
     expect(biz).not.toContain('scope=')
