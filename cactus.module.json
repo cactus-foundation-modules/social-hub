@@ -1,6 +1,6 @@
 {
   "name": "social-hub",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "tablePrefix": "shub_",
   "description": "Connect your Facebook Page and LinkedIn Page, see what you have already posted on both, and write, schedule and publish new posts with pictures and link previews from one place.",
   "requiresCoreVersion": "0.5.1779",
@@ -13,7 +13,7 @@
     {
       "label": "Social Hub",
       "path": "/m/social-hub",
-      "icon": "<path d=\"M4 11v3a1 1 0 0 0 1 1h2l5 4V6L7 10H5a1 1 0 0 0-1 1z\"/><path d=\"M16 9a4 4 0 0 1 0 6\"/><path d=\"M18.5 6.5a8 8 0 0 1 0 11\"/>",
+      "icon": "<circle cx=\"18\" cy=\"5\" r=\"3\"/><circle cx=\"6\" cy=\"12\" r=\"3\"/><circle cx=\"18\" cy=\"19\" r=\"3\"/><path d=\"M8.6 13.5l6.8 4M15.4 6.5l-6.8 4\"/>",
       "permission": "socialhub.view"
     }
   ],
