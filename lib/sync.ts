@@ -55,9 +55,16 @@ export async function syncConnection(conn: ConnectionSecrets): Promise<SyncOutco
   try {
     const token = await usableToken(conn)
     const size = FETCH_SIZE[conn.provider]
-    const { posts, notice } = conn.provider === 'facebook'
+    const read = conn.provider === 'facebook'
       ? await fetchFacebookPosts(conn.externalId, token)
       : await fetchLinkedInPosts(conn.externalId, token)
+    const { posts } = read
+    let notice = read.notice
+    if (notice && conn.provider === 'facebook') {
+      // A refused extra on a page the owner administers means the token lacks something; say what it does hold.
+      const creds = await getAppCredentials('facebook')
+      if (creds) notice = `${notice} What Facebook says this connection can do: ${await describeFacebookToken(creds, token)}.`
+    }
     await storeRemotePosts(conn.id, posts, size)
     await markSynced(conn.id, notice)
     return { connectionId: conn.id, ok: true, count: posts.length, notice: notice ?? undefined }

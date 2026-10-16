@@ -1,6 +1,6 @@
 {
   "name": "social-hub",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "tablePrefix": "shub_",
   "description": "Connect your Facebook Page and LinkedIn Page, see what you have already posted on both, and write, schedule and publish new posts with pictures and link previews from one place.",
   "requiresCoreVersion": "0.5.1779",
