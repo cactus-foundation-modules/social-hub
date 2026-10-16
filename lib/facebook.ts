@@ -35,12 +35,12 @@ export function graphError(json: unknown, status: number): SocialError {
   // 190: token invalid or expired. 102: session gone. 459/460/463/467: the user must log in again.
   const auth = code === 190 || code === 102 || code === 459 || code === 460 || code === 463 || code === 467
   if (auth) {
-    return new SocialError('Facebook no longer accepts this connection. Reconnect the page in Settings → Social Hub.', true)
+    return new SocialError('Facebook no longer accepts this connection. Reconnect the page in Settings → Social Hub.', true, code)
   }
   if (code === 200 || code === 10 || (code !== null && code >= 200 && code < 300)) {
-    return new SocialError(`Facebook says this connection is missing a permission: ${message}`)
+    return new SocialError(`Facebook says this connection is missing a permission: ${message}`, false, code)
   }
-  return new SocialError(message)
+  return new SocialError(message, false, code)
 }
 
 async function graphGet(path: string, token: string, query: Record<string, string> = {}): Promise<Record<string, unknown>> {
@@ -216,8 +216,58 @@ export function parseFacebookPost(raw: unknown): RemotePostInput | null {
   }
 }
 
+/** Just the post itself: no counts, no attachments. Needs the least from the token. */
+const BASIC_POST_FIELDS = 'id,message,created_time,permalink_url,full_picture'
+
+export function isPermissionError(err: unknown): boolean {
+  return err instanceof SocialError && !err.authFailure && err.code !== null && (err.code === 10 || (err.code >= 200 && err.code < 300))
+}
+
 export async function fetchFacebookPosts(pageId: string, token: string): Promise<RemotePostInput[]> {
-  const res = await graphGet(`/${pageId}/published_posts`, token, { fields: POST_FIELDS, limit: '25' })
+  let res: Record<string, unknown>
+  try {
+    res = await graphGet(`/${pageId}/published_posts`, token, { fields: POST_FIELDS, limit: '25' })
+  } catch (err) {
+    // The extras (likes, comments, attachments) can need more than the bare posts do. Show the posts
+    // without them rather than nothing at all; if even that is refused the original error stands.
+    if (!isPermissionError(err)) throw err
+    try {
+      res = await graphGet(`/${pageId}/published_posts`, token, { fields: BASIC_POST_FIELDS, limit: '25' })
+    } catch {
+      throw err
+    }
+  }
   const rows = Array.isArray(res.data) ? res.data : []
   return rows.map(parseFacebookPost).filter((p): p is RemotePostInput => p !== null)
+}
+
+/** Plain-English summary of Facebook's debug_token answer: what this token can really do. */
+export function formatTokenReport(body: unknown): string {
+  const data = asRecord(asRecord(body).data)
+  if (Object.keys(data).length === 0) return 'Facebook would not describe this token.'
+  const scopes = Array.isArray(data.scopes) ? data.scopes.filter((s): s is string => typeof s === 'string') : []
+  const granular = Array.isArray(data.granular_scopes) ? data.granular_scopes : []
+  const parts: string[] = [`token type ${asString(data.type) ?? 'unknown'}`, data.is_valid === false ? 'NOT valid' : 'valid']
+  parts.push(`scopes: ${scopes.length ? scopes.join(', ') : 'none'}`)
+  const per = granular
+    .map((g) => {
+      const row = asRecord(g)
+      const ids = Array.isArray(row.target_ids) ? row.target_ids.length : 0
+      return `${asString(row.scope) ?? '?'}${ids ? ` (${ids} page${ids === 1 ? '' : 's'})` : ''}`
+    })
+    .join(', ')
+  if (per) parts.push(`per-page: ${per}`)
+  return parts.join('; ')
+}
+
+/** Ask Facebook what a stored token can do. Never throws; answers a sentence either way. */
+export async function describeFacebookToken(creds: AppCredentials, token: string): Promise<string> {
+  try {
+    const res = await requestJson(
+      `${GRAPH}/debug_token?${new URLSearchParams({ input_token: token, access_token: `${creds.clientId}|${creds.clientSecret}` }).toString()}`,
+    )
+    return res.ok ? formatTokenReport(res.json) : 'Facebook would not describe this token.'
+  } catch {
+    return 'Facebook would not describe this token.'
+  }
 }

@@ -96,8 +96,11 @@ export const LIMITS = {
 export class SocialError extends Error {
   /** True when the network refused our credentials, so the page should be reconnected. */
   authFailure: boolean
-  constructor(message: string, authFailure = false) {
+  /** The network's own error number, when it gave one (Facebook's "code"). */
+  code: number | null
+  constructor(message: string, authFailure = false, code: number | null = null) {
     super(message)
+    this.code = code
     this.name = 'SocialError'
     this.authFailure = authFailure
   }

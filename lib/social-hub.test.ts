@@ -4,7 +4,7 @@ import { decodeEntities, parsePreview, readMetaTags } from '@/modules/social-hub
 import { firstUrl, proxiedImage } from '@/modules/social-hub/lib/urls'
 import { checkPost, PostInput, type PostInputData } from '@/modules/social-hub/lib/rules'
 import { isPrivateAddress } from '@/modules/social-hub/lib/safe-fetch'
-import { parseFacebookPost, facebookAuthUrl, graphError, missingFacebookPermissions } from '@/modules/social-hub/lib/facebook'
+import { parseFacebookPost, facebookAuthUrl, graphError, missingFacebookPermissions, formatTokenReport, isPermissionError } from '@/modules/social-hub/lib/facebook'
 import { imageUrnsOf, linkedInAuthUrl, linkedInError, parseLinkedInPost, readLinkedInText } from '@/modules/social-hub/lib/linkedin'
 import { callbackUrl, requestOrigin } from '@/modules/social-hub/lib/origin'
 import { relativeTime, toLocalInput } from '@/modules/social-hub/components/admin/hub/format'
@@ -135,6 +135,14 @@ describe('facebook', () => {
     expect(missingFacebookPermissions({ data: [{ permission: 'pages_show_list', status: 'granted' }, { permission: 'pages_manage_posts', status: 'declined' }] }))
       .toEqual(['pages_read_engagement', 'pages_manage_posts'])
     expect(missingFacebookPermissions({ data: ['pages_show_list', 'pages_read_engagement', 'pages_manage_posts'].map((permission) => ({ permission, status: 'granted' })) })).toEqual([])
+  })
+  it('describes a token and recognises permission refusals', () => {
+    expect(formatTokenReport({ data: { type: 'PAGE', is_valid: true, scopes: ['pages_show_list'], granular_scopes: [{ scope: 'pages_read_engagement', target_ids: ['1'] }] } }))
+      .toBe('token type PAGE; valid; scopes: pages_show_list; per-page: pages_read_engagement (1 page)')
+    expect(formatTokenReport({})).toMatch(/would not describe/)
+    expect(isPermissionError(graphError({ error: { code: 10, message: 'x' } }, 403))).toBe(true)
+    expect(isPermissionError(graphError({ error: { code: 190, message: 'x' } }, 400))).toBe(false)
+    expect(isPermissionError(graphError({ error: { code: 100, message: 'x' } }, 400))).toBe(false)
   })
   it('builds a login address with scopes or a configuration', () => {
     const plain = facebookAuthUrl({ clientId: 'A', clientSecret: 's', configId: null }, 'https://s.test/cb', 'st')

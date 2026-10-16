@@ -1,9 +1,10 @@
 import { prisma } from '@/lib/db/prisma'
 import { Prisma } from '@prisma/client'
 import { listActiveWithSecrets, markNeedsReauth, markSynced, noteConnectionError, type ConnectionSecrets } from '@/modules/social-hub/lib/connections'
-import { fetchFacebookPosts } from '@/modules/social-hub/lib/facebook'
+import { describeFacebookToken, fetchFacebookPosts, isPermissionError } from '@/modules/social-hub/lib/facebook'
 import { fetchLinkedInPosts } from '@/modules/social-hub/lib/linkedin'
 import type { RemotePostInput } from '@/modules/social-hub/lib/provider-types'
+import { getAppCredentials } from '@/modules/social-hub/lib/settings'
 import { usableToken } from '@/modules/social-hub/lib/tokens'
 import { syncAttentionAlert } from '@/modules/social-hub/lib/alerts'
 import { SocialError, type Connection, type RemotePost } from '@/modules/social-hub/lib/types'
@@ -61,7 +62,12 @@ export async function syncConnection(conn: ConnectionSecrets): Promise<SyncOutco
     await markSynced(conn.id)
     return { connectionId: conn.id, ok: true, count: posts.length }
   } catch (err) {
-    const message = err instanceof SocialError ? err.message : 'Reading this page failed unexpectedly.'
+    let message = err instanceof SocialError ? err.message : 'Reading this page failed unexpectedly.'
+    if (conn.provider === 'facebook' && isPermissionError(err) && conn.accessToken) {
+      // A permission refusal on a token that was granted the permission is baffling without seeing the token.
+      const creds = await getAppCredentials('facebook')
+      if (creds) message = `${message} What Facebook says this connection can do: ${await describeFacebookToken(creds, conn.accessToken)}.`
+    }
     if (err instanceof SocialError && err.authFailure) await markNeedsReauth(conn.id, message)
     else await noteConnectionError(conn.id, message).catch(() => undefined)
     return { connectionId: conn.id, ok: false, error: message }
