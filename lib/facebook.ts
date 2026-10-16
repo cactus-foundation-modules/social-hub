@@ -95,6 +95,9 @@ export async function completeFacebookLogin(creds: AppCredentials, redirectUri: 
   )
   const longToken = asString(asRecord(long.json).access_token) ?? shortToken
 
+  // Not used for anything but proving public_profile works, which Meta's App Review asks to see.
+  await graphGet('/me', longToken, { fields: 'id,name' }).catch(() => null)
+
   const accounts = await graphGet('/me/accounts', longToken, {
     fields: 'id,name,access_token,link,picture.type(large){url}',
     limit: '100',
