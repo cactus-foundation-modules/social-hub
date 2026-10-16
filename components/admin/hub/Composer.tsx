@@ -12,6 +12,11 @@ import { timeZoneName, toLocalInput } from '@/modules/social-hub/components/admi
 type Props = {
   connections: Connection[]
   editing: Post | null
+  /**
+   * Start a new post from something that already exists elsewhere: the words, the
+   * address to attach as a link card, and which network's pages to tick.
+   */
+  prefill?: { text: string; linkUrl: string; provider: Provider }
   /** Called after a save that should refresh the lists. `message` is shown as a notice. */
   onSaved: (message: string) => void
   onClose: () => void
@@ -25,17 +30,23 @@ function nineAm(daysAhead: number, weekday?: number): Date {
   return d
 }
 
-export function Composer({ connections, editing, onSaved, onClose }: Props) {
+export function Composer({ connections, editing, prefill, onSaved, onClose }: Props) {
   const usable = useMemo(() => connections.filter((c) => c.status === 'active'), [connections])
-  const [text, setText] = useState(editing?.body ?? '')
+  const [text, setText] = useState(editing?.body ?? prefill?.text ?? '')
   const [images, setImages] = useState<PostImage[]>(editing?.images ?? [])
   const [chosen, setChosen] = useState<string[]>(
-    editing ? editing.targets.map((t) => t.connectionId) : usable.length === 1 ? [usable[0]!.id] : [],
+    editing
+      ? editing.targets.map((t) => t.connectionId)
+      : prefill
+        ? usable.filter((c) => c.provider === prefill.provider).map((c) => c.id)
+        : usable.length === 1 ? [usable[0]!.id] : [],
   )
   const [link, setLink] = useState<LinkPreview | null>(
     editing?.linkUrl
       ? { url: editing.linkUrl, title: editing.linkTitle, description: editing.linkDescription, imageUrl: editing.linkImageUrl, siteName: null }
-      : null,
+      : prefill
+        ? { url: prefill.linkUrl, title: null, description: null, imageUrl: null, siteName: null }
+        : null,
   )
   const [linkLoading, setLinkLoading] = useState(false)
   const [linkDraft, setLinkDraft] = useState('')
@@ -55,6 +66,12 @@ export function Composer({ connections, editing, onSaved, onClose }: Props) {
     if (res.ok) setLink(res.data.preview)
     else setLink({ url, title: null, description: null, imageUrl: null, siteName: null })
   }, [])
+
+  // A prefilled address gets its picture and description the same way a pasted one does.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on open; state is set after the response, never synchronously
+    if (prefill) void loadPreview(prefill.linkUrl)
+  }, [prefill, loadPreview])
 
   // A link typed into the text turns into a preview card, once, unless it has been dismissed.
   useEffect(() => {

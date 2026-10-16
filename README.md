@@ -15,6 +15,7 @@ It lives in the admin sidebar as **Social Hub**. Its settings are on the **Setti
 - **Write and publish.** A sheet with a text box, up to four pictures from the site's media library (or upload new ones), and a link. A link you type or paste becomes a preview card, like the networks show it.
 - **Post to several pages at once.** Tick the pages. If one fails the post is marked **Partly posted** and only the failed page is retried.
 - **Schedule.** Pick a date and time, or use a quick choice. Scheduled posts are kept on your site and sent when the time comes. LinkedIn's API has no scheduling of its own, so Social Hub does it for both networks and they behave the same way.
+- **With Gazette.** If the Gazette module is installed, its admin gains a **Social posts** tab: every blog post with a Facebook and a LinkedIn column showing where it has been posted (with a link), when it is due if scheduled, or **Not posted** with a button that opens the new-post sheet pre-filled. Filter by posted, scheduled or not posted on either network.
 - **Drafts, edit, retry, delete.** Everything that has not gone out can be edited. Failures are listed under **Needs attention** with the network's own reason, and raise a single rolling notification in the admin bell.
 
 ## Setting it up
