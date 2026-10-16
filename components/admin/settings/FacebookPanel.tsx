@@ -70,13 +70,19 @@ export function FacebookPanel({ settings, draft, onChange }: Props) {
             differently from the address you are using to sign in to this admin.
           </li>
           <li>
-            <strong>Tell Facebook where to send people back to.</strong> Under the use case, open <strong>Facebook Login</strong> (or <strong>Facebook Login for Business</strong>) → <strong>Settings</strong>, and
-            paste the redirect address from the box on this page into <strong>Valid OAuth Redirect URIs</strong>. Make sure <strong>Client OAuth login</strong> and
-            <strong> Web OAuth login</strong> are switched on, then save.
+            <strong>Tell Facebook where to send people back to.</strong> This is the step that is easiest to get wrong. Under <strong>Facebook Login for Business → Settings</strong>
+            (or <strong>Facebook Login → Settings</strong> on an older app), find <strong>Valid OAuth Redirect URIs</strong> and:
             <ul>
-              <li>If your app uses <strong>Facebook Login for Business</strong>, also open <strong>Configurations</strong> → <strong>Create configuration</strong>, pick
-                &ldquo;User access token&rdquo;, choose the three permissions above, and copy the <strong>Configuration ID</strong> into the box on this page.</li>
+              <li>Paste the redirect address from the box on this page exactly as shown - no trailing space or slash.</li>
+              <li><strong>Press Enter</strong> so it turns into a tag with an ✕. Text left loose in the box is thrown away when you save.</li>
+              <li>Make sure <strong>Client OAuth login</strong> and <strong>Web OAuth login</strong> are on, then press <strong>Save changes</strong> at the bottom of the page and look for the green confirmation.</li>
+              <li>Paste the same address into the <strong>Redirect URI Validator</strong> at the top of that page and press <strong>Check URI</strong>. It must say the address is valid before you carry on. If it says &ldquo;invalid redirect URI&rdquo;, the address did not save - reload the page and check the tag is still there.</li>
             </ul>
+          </li>
+          <li>
+            <strong>Only if Facebook still refuses the sign-in: create a login configuration.</strong> Apps using <strong>Facebook Login for Business</strong> can ask for a saved configuration instead of a permission list.
+            Open <strong>Configurations → Create configuration</strong>, choose the <strong>General</strong> login variation and a <strong>User access token</strong>, add the three permissions above, then copy the
+            <strong> Configuration ID</strong> into the optional box on this page and save. You can leave this out if the connection works without it.
           </li>
           <li>
             <strong>Copy the app details here.</strong> In the app, open <strong>App settings → Basic</strong>. Copy the <strong>App ID</strong> and click <strong>Show</strong> next to the

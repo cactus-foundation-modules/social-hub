@@ -2,6 +2,10 @@
 
 const FAQ: { q: string; a: string }[] = [
   {
+    q: 'Facebook says "This is an invalid redirect URI for this application".',
+    a: 'The redirect address is not saved in your Facebook app. In Facebook Login for Business → Settings, paste the address from the Facebook setup tab into Valid OAuth Redirect URIs, press Enter so it becomes a tag, press Save changes, then reload the page and run Check URI in the validator at the top. It must say the address is valid.',
+  },
+  {
     q: 'Facebook says "Can\'t load URL - the domain of this URL isn\'t included in the app\'s domains".',
     a: 'In your Facebook app go to App settings → Basic, add your site\'s domain (for example example.com, without https://) to App domains, add a Website platform with your site address, and save. The address in the sign-in URL must match: sign in to this admin on the same address you gave Facebook, and make sure the redirect address on the Facebook setup tab is in Valid OAuth Redirect URIs.',
   },
