@@ -260,6 +260,12 @@ export async function deleteFacebookPost(token: string, externalId: string): Pro
   throw graphError(res.json, res.status)
 }
 
+/** Change the words of a post already on the Page. Facebook only lets the text of a post be edited, not its picture or link. */
+export async function updateFacebookPost(token: string, externalId: string, message: string): Promise<void> {
+  const res = await graphPost(`/${encodeURIComponent(externalId)}`, token, { message })
+  if (res.success === false) throw new SocialError('Facebook did not accept the change.')
+}
+
 const FACEBOOK_PAGE = 25
 const FACEBOOK_PAGES_MAX = 8
 

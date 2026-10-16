@@ -7,6 +7,7 @@ import { useTabParam } from '@/components/admin/useTabParam'
 import { PROVIDER_LABEL, type Connection, type Post, type PostStatus, type RemotePost } from '@/modules/social-hub/lib/types'
 import { api } from '@/modules/social-hub/components/admin/hub/api'
 import { Masonry } from '@/modules/social-hub/components/admin/hub/Masonry'
+import { EditRemoteSheet } from '@/modules/social-hub/components/admin/hub/EditRemoteSheet'
 import { Composer } from '@/modules/social-hub/components/admin/hub/Composer'
 import { Avatar } from '@/modules/social-hub/components/admin/hub/Parts'
 import { LocalPostRow, RemotePostRow } from '@/modules/social-hub/components/admin/hub/PostCards'
@@ -35,6 +36,7 @@ export default function SocialHubApp() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [editingRemote, setEditingRemote] = useState<RemotePost | null>(null)
   const [composer, setComposer] = useState<{ editing: Post | null } | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [askConfirm, confirmNode] = useAdminConfirm()
@@ -232,6 +234,7 @@ export default function SocialHubApp() {
                   post={p}
                   connection={connections.find((c) => c.id === p.connectionId)}
                   busy={busyId === `${p.connectionId}:${p.externalId}`}
+                  onEdit={canPost && p.provider === 'facebook' ? setEditingRemote : undefined}
                   onDelete={canPost ? removeRemote : undefined}
                 />)}
               </Masonry>
@@ -267,6 +270,13 @@ export default function SocialHubApp() {
 
       {composer && (
         <Composer connections={connections} editing={composer.editing} onClose={() => setComposer(null)} onSaved={(m) => void afterSave(m)} />
+      )}
+      {editingRemote && (
+        <EditRemoteSheet
+          post={editingRemote}
+          onClose={() => setEditingRemote(null)}
+          onSaved={(m) => { setEditingRemote(null); setError(''); setNotice(m); void loadList(view, filter) }}
+        />
       )}
       {confirmNode}
     </div>

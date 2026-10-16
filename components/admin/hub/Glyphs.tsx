@@ -15,7 +15,7 @@ export function ProviderGlyph({ provider, size = 14 }: { provider: Provider; siz
   )
 }
 
-export function Icon({ name, size = 16 }: { name: 'plus' | 'refresh' | 'close' | 'image' | 'link' | 'clock' | 'chevron' | 'external' | 'check' | 'warn' | 'like' | 'comment' | 'share' | 'trash' | 'edit' | 'send'; size?: number }) {
+export function Icon({ name, size = 16 }: { name: 'plus' | 'refresh' | 'close' | 'image' | 'link' | 'clock' | 'chevron' | 'external' | 'check' | 'warn' | 'like' | 'comment' | 'share' | 'trash' | 'edit' | 'send' | 'more'; size?: number }) {
   const common = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true }
   switch (name) {
     case 'plus': return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>
@@ -34,5 +34,6 @@ export function Icon({ name, size = 16 }: { name: 'plus' | 'refresh' | 'close' |
     case 'trash': return <svg {...common}><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
     case 'edit': return <svg {...common}><path d="M4 20h4L19 9l-4-4L4 16z" /></svg>
     case 'send': return <svg {...common}><path d="M21 3L10 14M21 3l-7 18-4-7-7-4z" /></svg>
+    case 'more': return <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.800" /><circle cx="12" cy="12" r="1.800" /><circle cx="12" cy="19" r="1.800" /></svg>
   }
 }

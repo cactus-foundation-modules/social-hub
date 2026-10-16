@@ -1,17 +1,19 @@
 'use client'
 
 import { PROVIDER_LABEL, type Connection, type Post, type RemotePost } from '@/modules/social-hub/lib/types'
-import { Avatar, LinkCard, MediaGrid, PostText, StatusPill, ViewLink } from '@/modules/social-hub/components/admin/hub/Parts'
+import { Avatar, LinkCard, MediaGrid, PostMenu, PostText, RemoteLinkCard, StatusPill, ViewLink, type PostMenuItem } from '@/modules/social-hub/components/admin/hub/Parts'
 import { fullDateTime, relativeTime } from '@/modules/social-hub/components/admin/hub/format'
 import { Icon } from '@/modules/social-hub/components/admin/hub/Glyphs'
 
 export function RemotePostRow({
-  post, connection, busy, onDelete,
+  post, connection, busy, onEdit, onDelete,
 }: {
   post: RemotePost
   connection: Connection | undefined
   busy?: boolean
-  /** Present only for someone allowed to delete; leaves the button out otherwise. */
+  /** Present only for someone allowed to edit, on a network that lets live posts be edited. */
+  onEdit?: (post: RemotePost) => void
+  /** Present only for someone allowed to delete; leaves the menu entry out otherwise. */
   onDelete?: (post: RemotePost) => void
 }) {
   const stats: { icon: 'like' | 'comment' | 'share'; n: number | null; label: string }[] = [
@@ -19,6 +21,13 @@ export function RemotePostRow({
     { icon: 'comment', n: post.commentCount, label: 'comments' },
     { icon: 'share', n: post.shareCount, label: 'shares' },
   ]
+  const network = PROVIDER_LABEL[post.provider]
+  const menu: PostMenuItem[] = []
+  if (post.permalink) menu.push({ label: `View on ${network}`, icon: 'external', href: post.permalink })
+  if (onEdit) menu.push({ label: 'Edit Post', icon: 'edit', onSelect: () => onEdit(post), disabled: busy })
+  if (onDelete) menu.push({ label: 'Delete Post', icon: 'trash', onSelect: () => onDelete(post), danger: true, disabled: busy })
+  // A link post's one picture is the link's own thumbnail, so it goes inside the card rather than beside it.
+  const sharesLink = !!post.linkUrl && !!post.linkTitle
   return (
     <article className="shub-row">
       <div className="shub-post-head">
@@ -28,21 +37,16 @@ export function RemotePostRow({
           <div className="shub-post-when" title={fullDateTime(post.postedAt)}>{relativeTime(post.postedAt)}</div>
         </div>
         {post.viaSocialHub && <span className="shub-via">Posted here</span>}
+        <PostMenu items={menu} />
       </div>
       <PostText text={post.message} />
-      <MediaGrid urls={post.imageUrls} />
-      {post.linkUrl && post.imageUrls.length === 0 && <LinkCard url={post.linkUrl} title={post.linkTitle} />}
-      <div className="shub-post-foot">
-        {stats.map((s) => s.n !== null && (
-          <span key={s.icon} className="shub-stat" title={s.label}><Icon name={s.icon} size={14} /> {s.n}</span>
-        ))}
-        <span className="shub-post-links"><ViewLink href={post.permalink} provider={post.provider} /></span>
-      </div>
-      {onDelete && (
-        <div className="shub-row-actions">
-          <button type="button" className="shub-pill shub-pill--small shub-pill--danger" disabled={busy} onClick={() => onDelete(post)}>
-            <Icon name="trash" size={13} /> Delete from {PROVIDER_LABEL[post.provider]}
-          </button>
+      {!sharesLink && <MediaGrid urls={post.imageUrls} />}
+      {post.linkUrl && <RemoteLinkCard url={post.linkUrl} title={post.linkTitle} imageUrl={sharesLink ? post.imageUrls[0] ?? null : null} />}
+      {stats.some((s) => s.n !== null) && (
+        <div className="shub-post-foot">
+          {stats.map((s) => s.n !== null && (
+            <span key={s.icon} className="shub-stat" title={s.label}><Icon name={s.icon} size={14} /> {s.n}</span>
+          ))}
         </div>
       )}
     </article>
