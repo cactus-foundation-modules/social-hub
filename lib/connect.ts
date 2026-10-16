@@ -1,14 +1,13 @@
 import { upsertConnection } from '@/modules/social-hub/lib/connections'
 import { completeFacebookLogin } from '@/modules/social-hub/lib/facebook'
 import { completeLinkedInLogin } from '@/modules/social-hub/lib/linkedin'
-import { getAppCredentials, redirectUri } from '@/modules/social-hub/lib/settings'
+import { getAppCredentials } from '@/modules/social-hub/lib/settings'
 import { SocialError, type Provider } from '@/modules/social-hub/lib/types'
 
 /** Finish a login: swap the code for tokens, find every page the person runs, and save them. Answers how many. */
-export async function completeConnection(provider: Provider, code: string, userId: string): Promise<number> {
+export async function completeConnection(provider: Provider, code: string, userId: string, redirect: string): Promise<number> {
   const creds = await getAppCredentials(provider)
-  const redirect = redirectUri(provider)
-  if (!creds || !redirect) throw new SocialError('The app details for this network are not saved yet.')
+  if (!creds) throw new SocialError('The app details for this network are not saved yet.')
 
   if (provider === 'facebook') {
     const login = await completeFacebookLogin(creds, redirect, code)

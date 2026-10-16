@@ -2,6 +2,10 @@
 
 const FAQ: { q: string; a: string }[] = [
   {
+    q: 'Facebook says "Can\'t load URL - the domain of this URL isn\'t included in the app\'s domains".',
+    a: 'In your Facebook app go to App settings → Basic, add your site\'s domain (for example example.com, without https://) to App domains, add a Website platform with your site address, and save. The address in the sign-in URL must match: sign in to this admin on the same address you gave Facebook, and make sure the redirect address on the Facebook setup tab is in Valid OAuth Redirect URIs.',
+  },
+  {
     q: 'Facebook says it did not share any Pages.',
     a: 'On the step where Facebook lets you choose, tick the Pages you want to use. You also need to be an admin of the Page (or have full control of it). If you skipped it, press Connect again and choose Pages this time.',
   },

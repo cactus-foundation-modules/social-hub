@@ -6,6 +6,7 @@ import { checkPost, PostInput, type PostInputData } from '@/modules/social-hub/l
 import { isPrivateAddress } from '@/modules/social-hub/lib/safe-fetch'
 import { parseFacebookPost, facebookAuthUrl, graphError } from '@/modules/social-hub/lib/facebook'
 import { imageUrnsOf, linkedInAuthUrl, linkedInError, parseLinkedInPost, readLinkedInText } from '@/modules/social-hub/lib/linkedin'
+import { callbackUrl, requestOrigin } from '@/modules/social-hub/lib/origin'
 import { relativeTime, toLocalInput } from '@/modules/social-hub/components/admin/hub/format'
 import type { Connection } from '@/modules/social-hub/lib/types'
 
@@ -162,15 +163,29 @@ describe('linkedin', () => {
 })
 
 describe('oauth state', () => {
-  it('accepts only the cookie we issued, for the same person and network, before it expires', async () => {
-    const { createState, verifyState } = await import('@/modules/social-hub/lib/oauth-state')
-    const { state, cookie } = createState('facebook', 'u1', 1_000)
-    expect(verifyState(cookie, state, 'facebook', 'u1', 2_000)).toBe(true)
-    expect(verifyState(cookie, state, 'linkedin', 'u1', 2_000)).toBe(false)
-    expect(verifyState(cookie, state, 'facebook', 'u2', 2_000)).toBe(false)
-    expect(verifyState(cookie, 'other', 'facebook', 'u1', 2_000)).toBe(false)
-    expect(verifyState(cookie, state, 'facebook', 'u1', 1_000 + 601_000)).toBe(false)
-    expect(verifyState(undefined, state, 'facebook', 'u1')).toBe(false)
+  it('hands back the redirect only for the cookie we issued, for the same person and network, before it expires', async () => {
+    const { createState, readState } = await import('@/modules/social-hub/lib/oauth-state')
+    const r = 'https://deskwell.co.uk/api/m/social-hub/oauth/facebook/callback'
+    const { state, cookie } = createState('facebook', 'u1', r, 1_000)
+    expect(readState(cookie, state, 'facebook', 'u1', 2_000)).toBe(r)
+    expect(readState(cookie, state, 'linkedin', 'u1', 2_000)).toBeNull()
+    expect(readState(cookie, state, 'facebook', 'u2', 2_000)).toBeNull()
+    expect(readState(cookie, 'other', 'facebook', 'u1', 2_000)).toBeNull()
+    expect(readState(cookie, state, 'facebook', 'u1', 1_000 + 601_000)).toBeNull()
+    expect(readState(undefined, state, 'facebook', 'u1')).toBeNull()
+  })
+})
+
+describe('request origin', () => {
+  const h = (o: Record<string, string>) => new Headers(o)
+  it('uses the address the browser used, not a stale SITE_URL', () => {
+    expect(requestOrigin(h({ 'x-forwarded-host': 'deskwell.co.uk', 'x-forwarded-proto': 'https' }), 'https://x.test')).toBe('https://deskwell.co.uk')
+    expect(requestOrigin(h({ host: 'www.deskwell.co.uk' }), 'https://x.test')).toBe('https://www.deskwell.co.uk')
+    expect(requestOrigin(h({ host: 'localhost:3000' }), 'https://x.test')).toBe('http://localhost:3000')
+  })
+  it('falls back to the request address and refuses odd hosts', () => {
+    expect(requestOrigin(h({ host: 'evil.test/../x' }), 'https://fallback.test/a')).toBe('https://fallback.test')
+    expect(callbackUrl('linkedin', 'https://a.test')).toBe('https://a.test/api/m/social-hub/oauth/linkedin/callback')
   })
 })
 

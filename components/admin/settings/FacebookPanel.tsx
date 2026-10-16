@@ -1,5 +1,6 @@
 'use client'
 
+import { hostOf as hostFrom } from '@/modules/social-hub/components/admin/hub/format'
 import { InfoTip } from '@/components/admin/InfoTip'
 import { Code, CopyField, Ext, Steps } from '@/modules/social-hub/components/admin/settings/ui'
 import type { Credentials, SettingsView } from '@/modules/social-hub/components/admin/settings/types'
@@ -11,6 +12,7 @@ type Props = {
 }
 
 export function FacebookPanel({ settings, draft, onChange }: Props) {
+  const domain = settings.siteUrl ? hostFrom(settings.siteUrl) : 'your-site.com'
   return (
     <div className="shub-set settings-cols">
       <div className="card">
@@ -60,6 +62,12 @@ export function FacebookPanel({ settings, draft, onChange }: Props) {
               <li><Code>pages_read_engagement</Code> - lets us read your existing posts and their likes and comments</li>
               <li><Code>pages_manage_posts</Code> - lets us publish and schedule posts</li>
             </ul>
+          </li>
+          <li>
+            <strong>Add your site&apos;s domain.</strong> In <strong>App settings → Basic</strong>, put <Code>{domain}</Code> in <strong>App domains</strong>, then click
+            <strong> Add platform</strong>, choose <strong>Website</strong> and enter <Code>{settings.siteUrl ?? 'https://your-site'}</Code> as the Site URL. Save changes.
+            Facebook refuses a sign-in with &ldquo;Can&apos;t load URL - the domain of this URL isn&apos;t included in the app&apos;s domains&rdquo; if this is missing or spelt
+            differently from the address you are using to sign in to this admin.
           </li>
           <li>
             <strong>Tell Facebook where to send people back to.</strong> Under the use case, open <strong>Facebook Login</strong> (or <strong>Facebook Login for Business</strong>) → <strong>Settings</strong>, and

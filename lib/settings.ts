@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/db/prisma'
 import { decryptSecret, encryptSecret } from '@/lib/crypto/secrets'
-import { getSiteUrlOrNull } from '@/lib/config/env'
 import type { Provider } from '@/modules/social-hub/lib/types'
 
 type Row = {
@@ -89,8 +88,3 @@ export async function updateSettings(patch: HubSettingsPatch): Promise<void> {
   }
 }
 
-/** The address each network must be told it may send people back to. */
-export function redirectUri(provider: Provider, siteUrl: string | null = getSiteUrlOrNull()): string | null {
-  if (!siteUrl) return null
-  return `${siteUrl}/api/m/social-hub/oauth/${provider}/callback`
-}

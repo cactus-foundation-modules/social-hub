@@ -5,7 +5,7 @@ import { getSiteUrlOrNull } from '@/lib/config/env'
 import { guard } from '@/modules/social-hub/lib/api'
 import { syncAttentionAlert } from '@/modules/social-hub/lib/alerts'
 import { completeConnection } from '@/modules/social-hub/lib/connect'
-import { STATE_COOKIE, verifyState } from '@/modules/social-hub/lib/oauth-state'
+import { STATE_COOKIE, readState } from '@/modules/social-hub/lib/oauth-state'
 import { syncAll } from '@/modules/social-hub/lib/sync'
 import { PROVIDERS, SocialError, type Provider } from '@/modules/social-hub/lib/types'
 
@@ -40,12 +40,13 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   const code = query.get('code')
   const cookie = request.cookies.get(STATE_COOKIE)?.value
-  if (!code || !verifyState(cookie, query.get('state'), p, g.access.userId)) {
+  const redirect = readState(cookie, query.get('state'), p, g.access.userId)
+  if (!code || !redirect) {
     return back(request, { error: 'That sign-in could not be checked (it may have expired). Please try connecting again.' })
   }
 
   try {
-    const count = await completeConnection(p, code, g.access.userId)
+    const count = await completeConnection(p, code, g.access.userId, redirect)
     if (count === 0) {
       return back(request, {
         error: p === 'facebook'

@@ -26,7 +26,7 @@ In short:
 **Facebook**
 1. Create an app at [developers.facebook.com/apps](https://developers.facebook.com/apps/) with the **Manage everything on your Page** use case.
 2. Add the permissions `pages_show_list`, `pages_read_engagement` and `pages_manage_posts`.
-3. Under Facebook Login settings, add the redirect address shown in Social Hub as a **Valid OAuth Redirect URI**. (If your app uses *Facebook Login for Business*, create a configuration with those permissions and paste its **Configuration ID** into Social Hub.)
+3. In App settings → Basic, put your site's domain in **App domains** and add a **Website** platform with your site address. Then, under Facebook Login settings, add the redirect address shown in Social Hub as a **Valid OAuth Redirect URI**. (If your app uses *Facebook Login for Business*, create a configuration with those permissions and paste its **Configuration ID** into Social Hub.)
 4. Copy the **App ID** and **App secret** (App settings → Basic) into Social Hub and save.
 5. Make the app **Live** (posts made by an app in Development mode are only visible to people with a role on it).
 6. Press **Connect Facebook** on the Accounts tab and tick your Pages.

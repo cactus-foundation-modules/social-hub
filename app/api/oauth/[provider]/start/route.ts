@@ -5,12 +5,13 @@ import { guard } from '@/modules/social-hub/lib/api'
 import { facebookAuthUrl } from '@/modules/social-hub/lib/facebook'
 import { linkedInAuthUrl } from '@/modules/social-hub/lib/linkedin'
 import { createState, STATE_COOKIE, STATE_TTL_SECONDS } from '@/modules/social-hub/lib/oauth-state'
-import { getAppCredentials, redirectUri } from '@/modules/social-hub/lib/settings'
+import { callbackUrl, requestOrigin } from '@/modules/social-hub/lib/origin'
+import { getAppCredentials } from '@/modules/social-hub/lib/settings'
 import { PROVIDERS, type Provider } from '@/modules/social-hub/lib/types'
 
 type Params = { params: Promise<{ provider: string }> }
 
-export async function GET(_request: NextRequest, { params }: Params) {
+export async function GET(request: NextRequest, { params }: Params) {
   const g = await guard('manage')
   if ('response' in g) return g.response
   const { provider } = await params
@@ -18,12 +19,12 @@ export async function GET(_request: NextRequest, { params }: Params) {
   const p = provider as Provider
 
   const creds = await getAppCredentials(p)
-  const redirect = redirectUri(p)
-  if (!creds || !redirect) {
+  const redirect = callbackUrl(p, requestOrigin(request.headers, request.nextUrl.origin))
+  if (!creds) {
     return errorResponse('Save the app details for this network in Settings → Social Hub first.', 409)
   }
 
-  const { state, cookie } = createState(p, g.access.userId)
+  const { state, cookie } = createState(p, g.access.userId, redirect)
   const url = p === 'facebook' ? facebookAuthUrl(creds, redirect, state) : linkedInAuthUrl(creds, redirect, state)
   const res = NextResponse.redirect(url)
   res.cookies.set(STATE_COOKIE, cookie, {
