@@ -29,11 +29,11 @@ describe('reading a Facebook page', () => {
     expect(read.notice).toBeNull()
   })
 
-  it('steps down when the counts are refused, keeps the link, and says so with the reason', async () => {
+  it('steps down when the counts are refused, keeps the attachments, and says so with the reason', async () => {
     requestJson.mockResolvedValueOnce(refused('(#200) Requires pages_read_engagement'))
     requestJson.mockResolvedValueOnce(ok([post(1)]))
     const read = await fetchFacebookPosts('1', 't')
-    expect(fieldsOf(1)).toContain('link')
+    expect(fieldsOf(1)).toContain('attachments')
     expect(fieldsOf(1)).not.toContain('likes')
     expect(read.notice).toMatch(/like, comment and share counts/)
     expect(read.notice).toMatch(/Requires pages_read_engagement/)
@@ -42,10 +42,10 @@ describe('reading a Facebook page', () => {
   it('warns that Gazette cannot be matched when only the bare post is allowed', async () => {
     requestJson.mockResolvedValueOnce(refused('no'))
     requestJson.mockResolvedValueOnce(refused('no'))
-    requestJson.mockResolvedValueOnce(refused('no'))
     requestJson.mockResolvedValueOnce(ok([post(1)]))
     const read = await fetchFacebookPosts('1', 't')
     expect(read.notice).toMatch(/Gazette posts cannot be matched/)
+    expect(fieldsOf(0)).not.toMatch(/(^|,)link(,|$)/)
   })
 
   it('throws when even the bare post is refused', async () => {

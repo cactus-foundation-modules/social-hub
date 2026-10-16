@@ -183,18 +183,17 @@ const ATTACHMENT_FIELDS = 'attachments{media_type,type,url,title,media{image{src
 /**
  * What to ask for, richest first. A token can be allowed the posts and refused the
  * extras (counts, attachments), and the extras differ in what they need, so each step
- * drops the most demanding thing still left. `link` is a plain field and is what tells
- * us which web address a picture post was sharing, which is how a blog post is
- * recognised on the page - so it is kept in every step but the last resort.
+ * drops the most demanding thing still left. The attachment is what tells us which web
+ * address a post was sharing, which is how a blog post is recognised on the page. (The
+ * old plain `link` field is gone for good: Facebook refuses any request that names it.)
  */
 const FIELD_STEPS = [
-  ['id', 'message', 'created_time', 'permalink_url', 'full_picture', 'shares', 'link', ATTACHMENT_FIELDS, 'likes.limit(0).summary(true)', 'comments.limit(0).summary(true)'].join(','),
-  ['id', 'message', 'created_time', 'permalink_url', 'full_picture', 'link', ATTACHMENT_FIELDS].join(','),
-  'id,message,created_time,permalink_url,full_picture,link',
+  ['id', 'message', 'created_time', 'permalink_url', 'full_picture', 'shares', ATTACHMENT_FIELDS, 'likes.limit(0).summary(true)', 'comments.limit(0).summary(true)'].join(','),
+  ['id', 'message', 'created_time', 'permalink_url', 'full_picture', ATTACHMENT_FIELDS].join(','),
   'id,message,created_time,permalink_url,full_picture',
 ]
 
-/** A picture post's `link` can be its own photo page on Facebook; only an address elsewhere says what was shared. */
+/** A picture post's address can be its own photo page on Facebook; only an address elsewhere says what was shared. */
 function externalLink(link: string | null): string | null {
   if (!link) return null
   try {
@@ -228,7 +227,7 @@ export function parseFacebookPost(raw: unknown): RemotePostInput | null {
     message: asString(row.message) ?? '',
     permalink: rawLink ? (rawLink.startsWith('http') ? rawLink : `https://www.facebook.com${rawLink}`) : null,
     imageUrls: images.slice(0, 6),
-    linkUrl: isLink ? asString(attachment.url) : externalLink(asString(row.link)),
+    linkUrl: isLink ? asString(attachment.url) : externalLink(asString(attachment.url) ?? asString(row.link)),
     linkTitle: isLink ? asString(attachment.title) : null,
     postedAt: created ? new Date(created) : null,
     likeCount: asNumber(asRecord(asRecord(row.likes).summary).total_count),
@@ -267,7 +266,6 @@ export const FACEBOOK_READ_CAP = FACEBOOK_PAGE * FACEBOOK_PAGES_MAX
 const STEP_LOSS = [
   null,
   'like, comment and share counts',
-  'like, comment and share counts, and the details of any link a post shares',
   'like, comment and share counts, the details of link posts, and the address a post links to (so Gazette posts cannot be matched to it)',
 ]
 

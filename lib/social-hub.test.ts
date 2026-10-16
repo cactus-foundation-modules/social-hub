@@ -220,6 +220,10 @@ describe('Facebook picture posts and the address they share', () => {
   it('takes the plain link field when it points at another site', () => {
     expect(parseFacebookPost({ ...base, link: 'https://deskwell.co.uk/a-post' })?.linkUrl).toBe('https://deskwell.co.uk/a-post')
   })
+  it('reads the address from the attachment of a picture post', () => {
+    const a = { data: [{ type: 'photo', url: 'https://deskwell.co.uk/a-post' }] }
+    expect(parseFacebookPost({ ...base, attachments: a })?.linkUrl).toBe('https://deskwell.co.uk/a-post')
+  })
   it('ignores a link that is only the post\'s own page on Facebook', () => {
     expect(parseFacebookPost({ ...base, link: 'https://www.facebook.com/photo.php?fbid=1' })?.linkUrl).toBeNull()
   })
