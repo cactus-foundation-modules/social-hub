@@ -96,7 +96,7 @@ function ConnectCard({ provider, connections, configured, onChanged, goTo }: {
           <strong>Meta test calls for {c.name}</strong>
           <ul>
             {testResults[c.id]!.map((r) => (
-              <li key={r.permission}>{r.ok ? '✓' : '✗'} <code>{r.permission}</code> - {r.what}. {r.detail}</li>
+              <li key={r.what}>{r.ok ? '✓' : '✗'} <code>{r.permission}</code> - {r.what}. {r.detail}</li>
             ))}
             <li>Connecting a page makes the <code>pages_show_list</code> and <code>public_profile</code> calls, so press Reconnect to refresh those.</li>
           </ul>
