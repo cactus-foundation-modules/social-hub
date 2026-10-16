@@ -1,0 +1,96 @@
+'use client'
+
+import { InfoTip } from '@/components/admin/InfoTip'
+import { Code, CopyField, Ext, Steps } from '@/modules/social-hub/components/admin/settings/ui'
+import type { Credentials, SettingsView } from '@/modules/social-hub/components/admin/settings/types'
+
+type Props = {
+  settings: SettingsView
+  draft: Credentials
+  onChange: (patch: Partial<Credentials>) => void
+}
+
+export function FacebookPanel({ settings, draft, onChange }: Props) {
+  return (
+    <div className="shub-set settings-cols">
+      <div className="card">
+        <h3 className="card-title">Your Facebook app</h3>
+        <div className="settings-fields">
+          <div className="field">
+            <label>App ID</label>
+            <input value={draft.fbAppId} onChange={(e) => onChange({ fbAppId: e.target.value })} placeholder="1234567890123456" inputMode="numeric" autoComplete="off" />
+          </div>
+          <div className="field">
+            <label>App secret</label>
+            <input type="password" value={draft.fbAppSecret} onChange={(e) => onChange({ fbAppSecret: e.target.value })}
+              placeholder={settings.hasFbAppSecret ? 'Saved - type to replace' : 'Paste the app secret'} autoComplete="new-password" />
+          </div>
+          <div className="field field--wide">
+            <label>
+              Login configuration ID (optional)
+              <InfoTip>Only needed if your app uses &ldquo;Facebook Login for Business&rdquo;, which asks for a saved configuration instead of a list of permissions. Leave it empty for an ordinary Facebook Login app.</InfoTip>
+            </label>
+            <input value={draft.fbConfigId} onChange={(e) => onChange({ fbConfigId: e.target.value })} placeholder="Leave empty unless Facebook asks for one" autoComplete="off" />
+          </div>
+        </div>
+        <CopyField label="Redirect address to give Facebook" value={settings.redirectUris.facebook} />
+        {!settings.encryptionReady && <p className="field-error">This site has no usable ENCRYPTION_KEY, so the app secret cannot be stored. Ask whoever runs the site to set one.</p>}
+        <p className="shub-note">The secret is stored encrypted and never shown again. Press <strong>Save</strong> at the top, then go to <strong>Accounts</strong> to connect.</p>
+      </div>
+
+      <div className="card">
+        <h3 className="card-title">How to set it up</h3>
+        <p className="shub-note" style={{ marginTop: 0, marginBottom: '1rem' }}>
+          You do this once, on Facebook&apos;s developer site. It takes about ten minutes. Facebook rearranges its menus now and then,
+          so if a name is slightly different, look for the closest match.
+        </p>
+        <Steps>
+          <li>
+            <strong>Sign in to Meta for Developers.</strong> Go to <Ext href="https://developers.facebook.com/apps/">developers.facebook.com/apps</Ext> with the Facebook account
+            that is an <em>admin</em> of the Page you want to post to. If it is your first time, Facebook asks you to register as a developer.
+          </li>
+          <li>
+            <strong>Create the app.</strong> Click <strong>Create app</strong>, name it something you will recognise (such as &ldquo;Our website Social Hub&rdquo;), add a contact email,
+            and carry on. When asked what you want the app to do, choose <strong>Manage everything on your Page</strong>. You can skip connecting a business portfolio.
+          </li>
+          <li>
+            <strong>Add the permissions.</strong> Open the app&apos;s <strong>Use cases</strong>, choose <strong>Customize</strong> on that use case, and click <strong>Add</strong> next to:
+            <ul>
+              <li><Code>pages_show_list</Code> (already there by default)</li>
+              <li><Code>pages_read_engagement</Code> - lets us read your existing posts and their likes and comments</li>
+              <li><Code>pages_manage_posts</Code> - lets us publish and schedule posts</li>
+            </ul>
+          </li>
+          <li>
+            <strong>Tell Facebook where to send people back to.</strong> Under the use case, open <strong>Facebook Login</strong> (or <strong>Facebook Login for Business</strong>) → <strong>Settings</strong>, and
+            paste the redirect address from the box on this page into <strong>Valid OAuth Redirect URIs</strong>. Make sure <strong>Client OAuth login</strong> and
+            <strong> Web OAuth login</strong> are switched on, then save.
+            <ul>
+              <li>If your app uses <strong>Facebook Login for Business</strong>, also open <strong>Configurations</strong> → <strong>Create configuration</strong>, pick
+                &ldquo;User access token&rdquo;, choose the three permissions above, and copy the <strong>Configuration ID</strong> into the box on this page.</li>
+            </ul>
+          </li>
+          <li>
+            <strong>Copy the app details here.</strong> In the app, open <strong>App settings → Basic</strong>. Copy the <strong>App ID</strong> and click <strong>Show</strong> next to the
+            <strong> App secret</strong> and copy that too. Paste both into the boxes above and press <strong>Save</strong>.
+          </li>
+          <li>
+            <strong>Make the app Live.</strong> Still in <strong>App settings → Basic</strong>, add a <strong>Privacy policy URL</strong> (your site&apos;s privacy page), an app icon and a category, then use the
+            switch at the top of the dashboard to move the app from <em>Development</em> to <em>Live</em>. This matters:
+            posts published by an app that is still in Development mode are only visible to people with a role on the app, not to the public.
+            You do not normally need App Review when every person connecting is an admin or developer of the app and the Pages are ones they manage.
+          </li>
+          <li>
+            <strong>Connect your Page.</strong> Go to the <strong>Accounts</strong> tab and press <strong>Connect Facebook</strong>. Facebook asks you to approve; when it lets you choose Pages,
+            tick every Page you want Social Hub to use. They appear on the Accounts tab straight away.
+          </li>
+        </Steps>
+        <p className="shub-note">
+          Facebook page connections do not expire by themselves. They stop working if the person who connected them changes their Facebook password,
+          loses their admin role on the Page or removes the app - Social Hub then marks the Page &ldquo;Needs reconnecting&rdquo; and tells you in the bell.
+          Using Graph API {settings.facebookVersion}.
+        </p>
+      </div>
+    </div>
+  )
+}
