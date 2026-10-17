@@ -30,7 +30,8 @@ type TargetRow = {
  * neither alone is the whole story - the cache of what is on each page (which
  * includes posts made outside Social Hub, as long as they are recent enough to
  * have been read) and Social Hub's own posts (which is the only place a scheduled
- * post exists at all).
+ * post exists at all). A scheduled post with no pages chosen yet still counts as
+ * scheduled on every connected page: it is waiting, not absent.
  */
 export async function matchPostedLinks(urls: string[]): Promise<LinkMatches> {
   // Normalised address -> the addresses as the caller wrote them.
@@ -52,12 +53,15 @@ export async function matchPostedLinks(urls: string[]): Promise<LinkMatches> {
       WHERE r."link_url" IS NOT NULL OR r."message" LIKE '%http%'
     `,
     prisma.$queryRaw<TargetRow[]>`
-      SELECT t."connection_id", c."provider", p."body", p."link_url", p."status" AS "post_status",
-             p."scheduled_at", t."status" AS "target_status", t."permalink", t."error", t."published_at"
-      FROM "shub_post_targets" t
-      JOIN "shub_posts" p ON p."id" = t."post_id"
-      JOIN "shub_connections" c ON c."id" = t."connection_id"
+      SELECT c."id" AS "connection_id", c."provider", p."body", p."link_url", p."status" AS "post_status",
+             p."scheduled_at", COALESCE(t."status", 'pending') AS "target_status", t."permalink", t."error", t."published_at"
+      FROM "shub_posts" p
+      JOIN "shub_connections" c ON TRUE
+      LEFT JOIN "shub_post_targets" t ON t."post_id" = p."id" AND t."connection_id" = c."id"
       WHERE p."status" <> 'draft'
+        AND (t."id" IS NOT NULL
+             OR (p."status" IN ('scheduled', 'publishing')
+                 AND NOT EXISTS (SELECT 1 FROM "shub_post_targets" x WHERE x."post_id" = p."id")))
     `,
   ])
 

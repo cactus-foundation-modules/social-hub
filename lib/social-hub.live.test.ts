@@ -60,6 +60,7 @@ describe.runIf(shouldRun)('Social Hub against a real database', () => {
   let publish: typeof import('./publish')
   let remote: typeof import('./remote-delete')
   let posted: typeof import('./posted-links')
+  let follow: typeof import('./gazette-follow')
   let applyFile: (file: string) => Promise<void>
   let fbId = ''
   let liId = ''
@@ -93,6 +94,7 @@ describe.runIf(shouldRun)('Social Hub against a real database', () => {
     publish = await import('./publish')
     remote = await import('./remote-delete')
     posted = await import('./posted-links')
+    follow = await import('./gazette-follow')
 
     await conns.upsertConnection({
       provider: 'facebook', externalId: 'fbpage1', name: 'Deskwell Facebook', pictureUrl: null, profileUrl: 'https://facebook.com/x',
@@ -334,6 +336,61 @@ describe.runIf(shouldRun)('Social Hub against a real database', () => {
     expect((await sync.listFeed(fbId)).some((p) => p.externalId === 'del1')).toBe(false)
     expect(await posts.getPost(own)).toBeNull()
     vi.unstubAllGlobals()
+  })
+
+  it('keeps a social post waiting on a Gazette article, arms it when the article is scheduled or published, and stands it down again', async () => {
+    const article = {
+      id: 'gz-1', title: 'Desk news', excerpt: 'All about desks', url: 'https://site.test/desk-news', imageUrl: '/media/desk.jpg',
+      status: 'DRAFT' as const, liveAt: null, isPrivate: false,
+    }
+    const first = await follow.saveLinked({ article, body: 'Read this', connectionIds: [fbId], sourceAt: null, go: false }, 'u1')
+    expect(first.dueNow).toBe(false)
+    let linked = await follow.linkedPost('gz-1')
+    expect(linked).toMatchObject({ id: first.id, status: 'draft', body: 'Read this', linkUrl: 'https://site.test/desk-news', linkImageUrl: '/media/desk.jpg', sourceAt: null })
+
+    // Saved again: the same row, not a second one.
+    const again = await follow.saveLinked({ article, body: 'Read this now', connectionIds: [fbId], sourceAt: null, go: false }, 'u1')
+    expect(again.id).toBe(first.id)
+
+    // Gazette schedules the article: the post is armed for the same moment, carrying the article's latest headline.
+    const liveAt = '2030-03-01T09:00:00.000Z'
+    await follow.socialHubGazettePostStatus({ action: 'schedule', postId: 'gz-1', post: { ...article, title: 'Desk news (revised)', status: 'SCHEDULED', liveAt } })
+    linked = await follow.linkedPost('gz-1')
+    expect(linked).toMatchObject({ status: 'scheduled', scheduledAt: liveAt, linkTitle: 'Desk news (revised)', body: 'Read this now' })
+
+    // The owner's own, later time wins; an earlier one never beats the article.
+    await follow.saveLinked({ article: { ...article, status: 'SCHEDULED', liveAt }, body: 'Later', connectionIds: [fbId], sourceAt: '2030-03-02T12:00:00.000Z', go: false }, 'u1')
+    expect((await follow.linkedPost('gz-1'))).toMatchObject({ status: 'scheduled', scheduledAt: '2030-03-02T12:00:00.000Z', sourceAt: '2030-03-02T12:00:00.000Z' })
+    await follow.saveLinked({ article: { ...article, status: 'SCHEDULED', liveAt }, body: 'Earlier', connectionIds: [fbId], sourceAt: '2030-01-01T00:00:00.000Z', go: false }, 'u1')
+    expect((await follow.linkedPost('gz-1'))?.scheduledAt).toBe(liveAt)
+
+    // Back to draft, then private: waiting again, nothing goes out.
+    await follow.socialHubGazettePostStatus({ action: 'unpublish', postId: 'gz-1', post: { ...article } })
+    expect(await follow.linkedPost('gz-1')).toMatchObject({ status: 'draft', scheduledAt: null })
+    await follow.socialHubGazettePostStatus({ action: 'publish', postId: 'gz-1', post: { ...article, status: 'PUBLISHED', liveAt: new Date().toISOString(), isPrivate: true } })
+    expect((await follow.linkedPost('gz-1'))?.status).toBe('draft')
+
+    // Published for real: due straight away (outside a request the cron sends it).
+    await follow.saveLinked({ article, body: 'Now', connectionIds: [fbId], sourceAt: null, go: false }, 'u1')
+    await follow.socialHubGazettePostStatus({ action: 'publish', postId: 'gz-1', post: { ...article, status: 'PUBLISHED', liveAt: new Date(Date.now() - 1000).toISOString() } })
+    linked = await follow.linkedPost('gz-1')
+    expect(linked?.status).toBe('scheduled')
+    expect(Date.parse(linked!.scheduledAt!)).toBeLessThanOrEqual(Date.now())
+
+    // Already live and the owner presses Post now.
+    const live = { ...article, id: 'gz-2', status: 'PUBLISHED' as const, liveAt: '2026-01-01T00:00:00.000Z' }
+    const drafted = await follow.saveLinked({ article: live, body: 'Old one', connectionIds: [fbId], sourceAt: null, go: false }, 'u1')
+    expect(drafted.dueNow).toBe(false)
+    expect((await follow.linkedPost('gz-2'))?.status).toBe('draft')
+    expect((await follow.saveLinked({ article: live, body: 'Old one', connectionIds: [fbId], sourceAt: null, go: true }, 'u1')).dueNow).toBe(true)
+
+    // Untick everything: gone. Delete the article: gone.
+    expect((await follow.saveLinked({ article: live, body: '', connectionIds: [], sourceAt: null, go: false }, 'u1')).id).toBeNull()
+    expect(await follow.linkedPost('gz-2')).toBeNull()
+    await follow.socialHubGazettePostStatus({ action: 'delete', postId: 'gz-1', post: null })
+    expect(await follow.linkedPost('gz-1')).toBeNull()
+    // An article nobody ticked anything for is simply ignored.
+    await follow.socialHubGazettePostStatus({ action: 'publish', postId: 'gz-none', post: { ...article, id: 'gz-none', status: 'PUBLISHED', liveAt: null } })
   })
 
   it('removes a page\'s posts and targets when it is disconnected', async () => {

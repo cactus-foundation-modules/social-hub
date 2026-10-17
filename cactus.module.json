@@ -1,6 +1,6 @@
 {
   "name": "social-hub",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "tablePrefix": "shub_",
   "notificationKinds": [
     {"id": "attention", "label": "Social Hub needs attention", "description": "A connected account, post or schedule needs a look.", "dedupePrefix": "social-hub:attention"}
@@ -37,6 +37,22 @@
       "permission": "socialhub.view",
       "import": "./components/admin/GazetteSocialTab",
       "component": "GazetteSocialTab"
+    },
+    {
+      "point": "gazette.post-editor-panels",
+      "id": "social-share",
+      "label": "Share on social media",
+      "order": 10,
+      "permission": "socialhub.view",
+      "import": "./components/admin/GazetteSharePanel",
+      "component": "GazetteSharePanel"
+    },
+    {
+      "point": "gazette.post-status-changed",
+      "id": "social-hub",
+      "import": "./lib/gazette-follow",
+      "component": "socialHubGazettePostStatus",
+      "serverOnly": true
     }
   ],
   "cronJobs": [
