@@ -131,11 +131,36 @@ export async function upsertConnection(input: ConnectionInput): Promise<void> {
       "last_error" = NULL,
       "updated_at" = CURRENT_TIMESTAMP
   `
+  // Give back any unsent posts this page was owed before it was disconnected.
+  await prisma.$executeRaw`
+    INSERT INTO "shub_post_targets" ("post_id", "connection_id")
+    SELECT m."post_id", c."id"
+    FROM "shub_target_memory" m
+    JOIN "shub_connections" c ON c."provider" = m."provider" AND c."external_id" = m."external_id"
+    WHERE m."provider" = ${input.provider} AND m."external_id" = ${input.externalId}
+    ON CONFLICT ("post_id", "connection_id") DO NOTHING
+  `
+  await prisma.$executeRaw`
+    DELETE FROM "shub_target_memory" WHERE "provider" = ${input.provider} AND "external_id" = ${input.externalId}
+  `
 }
 
+/** Disconnect a page. Posts still waiting to go to it are remembered, so reconnecting it puts them back. */
 export async function deleteConnection(id: string): Promise<boolean> {
-  const n = await prisma.$executeRaw`DELETE FROM "shub_connections" WHERE "id" = ${id}`
-  return n > 0
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`
+      INSERT INTO "shub_target_memory" ("post_id", "provider", "external_id")
+      SELECT t."post_id", c."provider", c."external_id"
+      FROM "shub_post_targets" t
+      JOIN "shub_connections" c ON c."id" = t."connection_id"
+      JOIN "shub_posts" p ON p."id" = t."post_id"
+      WHERE t."connection_id" = ${id} AND t."status" <> 'published'
+        AND p."status" IN ('draft', 'scheduled', 'failed', 'partial')
+      ON CONFLICT DO NOTHING
+    `
+    const n = await tx.$executeRaw`DELETE FROM "shub_connections" WHERE "id" = ${id}`
+    return n > 0
+  })
 }
 
 export async function markNeedsReauth(id: string, message: string): Promise<void> {

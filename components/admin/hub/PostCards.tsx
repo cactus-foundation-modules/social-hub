@@ -105,6 +105,9 @@ export function LocalPostRow({
           ))}
         </div>
       )}
+      {post.targets.length === 0 && (post.status === 'failed' || post.status === 'scheduled') && (
+        <p className="shub-target-error">No page is attached to this post, so it cannot go out. Edit it and choose a page.</p>
+      )}
       {failed.map((t) => <p key={t.id} className="shub-target-error">{t.connectionName}: {t.error}</p>)}
       <div className="shub-row-actions">
         {post.targets.filter((t) => t.permalink).map((t) => <ViewLink key={t.id} href={t.permalink} provider={t.provider} />)}

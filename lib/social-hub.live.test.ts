@@ -399,4 +399,20 @@ describe.runIf(shouldRun)('Social Hub against a real database', () => {
     expect(Number(left[0]!.n)).toBe(0)
     expect(await conns.deleteConnection(liId)).toBe(false)
   })
+
+  it('puts unsent posts back when a disconnected page is connected again', async () => {
+    await conns.upsertConnection({
+      provider: 'linkedin', externalId: '888', name: 'Back Again', pictureUrl: null, profileUrl: null,
+      accessToken: 'tok', refreshToken: null, tokenExpiresAt: null, refreshExpiresAt: null, connectedBy: 'u1',
+    })
+    const pageId = (await conns.listConnections()).find((c) => c.name === 'Back Again')!.id
+    const id = await posts.createPost({ body: 'owed', images: [], connectionIds: [pageId], mode: 'schedule', scheduledAt: '2030-01-01T00:00:00Z' }, 'u1')
+    expect(await conns.deleteConnection(pageId)).toBe(true)
+    expect((await posts.getPost(id))?.targets).toHaveLength(0)
+    await conns.upsertConnection({
+      provider: 'linkedin', externalId: '888', name: 'Back Again', pictureUrl: null, profileUrl: null,
+      accessToken: 'tok', refreshToken: null, tokenExpiresAt: null, refreshExpiresAt: null, connectedBy: 'u1',
+    })
+    expect((await posts.getPost(id))?.targets.map((t) => t.connectionName)).toEqual(['Back Again'])
+  })
 })
