@@ -1,17 +1,20 @@
-import { SocialError } from '@/modules/social-hub/lib/types'
+import { SocialError, TIMEOUT_ERROR } from '@/modules/social-hub/lib/types'
 
 const TIMEOUT_MS = 15_000
 
 export type JsonResult = { status: number; ok: boolean; json: unknown; headers: Headers; text: string }
 
+/** Sending a post can take a while: Facebook fetches the linked page and its picture before it answers. */
+export const PUBLISH_TIMEOUT_MS = 30_000
+
 /** fetch with a timeout, answering the body as JSON when it is. Never throws on a non-2xx. */
-export async function requestJson(url: string, init: RequestInit = {}): Promise<JsonResult> {
+export async function requestJson(url: string, init: RequestInit = {}, timeoutMs = TIMEOUT_MS): Promise<JsonResult> {
   let res: Response
   try {
-    res = await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS), cache: 'no-store' })
+    res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs), cache: 'no-store' })
   } catch (err) {
-    const reason = err instanceof Error && err.name === 'TimeoutError' ? 'took too long to answer' : 'could not be reached'
-    throw new SocialError(`The network ${reason}. Try again in a minute.`)
+    if (err instanceof Error && err.name === 'TimeoutError') throw new SocialError(TIMEOUT_ERROR)
+    throw new SocialError('The network could not be reached. Try again in a minute.')
   }
   const text = await res.text()
   let json: unknown = null

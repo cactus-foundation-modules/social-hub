@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/db/prisma'
 import type { PostInputData } from '@/modules/social-hub/lib/rules'
-import type { Post, PostImage, PostStatus, PostTarget, Provider, TargetStatus } from '@/modules/social-hub/lib/types'
+import { INTERRUPTED_ERROR, TIMEOUT_ERROR_PREFIX, type Post, type PostImage, type PostStatus, type PostTarget, type Provider, type TargetStatus } from '@/modules/social-hub/lib/types'
 
 type PostRow = {
   id: string
@@ -198,15 +198,60 @@ export async function claimNextDue(): Promise<string | null> {
   return rows[0]?.id ?? null
 }
 
-export type TargetWork = { id: string; connectionId: string; status: TargetStatus }
+export type TargetWork = {
+  id: string
+  connectionId: string
+  provider: Provider
+  status: TargetStatus
+  attempts: number
+  /** Why the last attempt failed, or null if there has not been one. */
+  error: string | null
+}
+
+/** How many times a post is sent to one page without anybody pressing a button: the first go plus one retry. */
+export const AUTO_ATTEMPTS = 2
+
+/**
+ * A page whose last attempt timed out and is still owed its automatic retry. Facebook only: it is
+ * the one network where we can look at the page afterwards and see whether the post went out.
+ */
+export function isRetryOwed(t: Pick<TargetWork, 'provider' | 'status' | 'attempts' | 'error'>): boolean {
+  return t.provider === 'facebook' && t.status === 'failed' && t.attempts < AUTO_ATTEMPTS && (t.error ?? '').startsWith(TIMEOUT_ERROR_PREFIX)
+}
+
+const RETRY_OWED_SQL = Prisma.sql`EXISTS (
+  SELECT 1 FROM "shub_post_targets" t JOIN "shub_connections" c ON c."id" = t."connection_id"
+  WHERE t."post_id" = p."id" AND t."status" = 'failed' AND t."attempts" < ${AUTO_ATTEMPTS}
+    AND t."error" LIKE ${`${TIMEOUT_ERROR_PREFIX}%`} AND c."provider" = 'facebook' AND c."status" = 'active'
+)`
 
 export async function pendingTargets(postId: string): Promise<TargetWork[]> {
-  const rows = await prisma.$queryRaw<{ id: string; connection_id: string; status: TargetStatus }[]>`
-    SELECT "id", "connection_id", "status" FROM "shub_post_targets"
-    WHERE "post_id" = ${postId} AND "status" IN ('pending', 'failed')
-    ORDER BY "id"
+  const rows = await prisma.$queryRaw<
+    { id: string; connection_id: string; provider: Provider; status: TargetStatus; attempts: number; error: string | null }[]
+  >`
+    SELECT t."id", t."connection_id", c."provider", t."status", t."attempts", t."error"
+    FROM "shub_post_targets" t JOIN "shub_connections" c ON c."id" = t."connection_id"
+    WHERE t."post_id" = ${postId} AND t."status" IN ('pending', 'failed')
+    ORDER BY t."id"
   `
-  return rows.map((r) => ({ id: r.id, connectionId: r.connection_id, status: r.status }))
+  return rows.map((r) => ({ id: r.id, connectionId: r.connection_id, provider: r.provider, status: r.status, attempts: r.attempts, error: r.error }))
+}
+
+/**
+ * Take hold of a post that failed on a timeout and is owed a retry. It waits a few minutes first so
+ * it is never retried in the same run that failed it: Facebook gets time to finish whatever it was doing.
+ */
+export async function claimNextRetry(): Promise<string | null> {
+  const rows = await prisma.$queryRaw<{ id: string }[]>`
+    UPDATE "shub_posts" SET "status" = 'publishing', "updated_at" = CURRENT_TIMESTAMP
+    WHERE "id" = (
+      SELECT p."id" FROM "shub_posts" p
+      WHERE p."status" IN ('failed', 'partial') AND p."updated_at" < CURRENT_TIMESTAMP - INTERVAL '5 minutes' AND ${RETRY_OWED_SQL}
+      ORDER BY p."updated_at" ASC LIMIT 1 FOR UPDATE SKIP LOCKED
+    )
+    RETURNING "id"
+  `
+  return rows[0]?.id ?? null
 }
 
 export async function startTarget(targetId: string): Promise<void> {
@@ -257,7 +302,7 @@ export async function releaseStalePosts(): Promise<number> {
   for (const { id } of stale) {
     await prisma.$executeRaw`
       UPDATE "shub_post_targets" SET "status" = 'failed',
-        "error" = 'This was interrupted part way. Check the page before retrying, in case it went out.'
+        "error" = ${INTERRUPTED_ERROR}
       WHERE "post_id" = ${id} AND "status" = 'publishing'
     `
     await settlePost(id)
@@ -267,8 +312,9 @@ export async function releaseStalePosts(): Promise<number> {
 
 export async function failedPostCount(): Promise<number> {
   const rows = await prisma.$queryRaw<{ n: bigint }[]>`
-    SELECT COUNT(*) AS "n" FROM "shub_posts"
-    WHERE "status" IN ('failed', 'partial') AND "updated_at" > CURRENT_TIMESTAMP - INTERVAL '7 days'
+    SELECT COUNT(*) AS "n" FROM "shub_posts" p
+    WHERE p."status" IN ('failed', 'partial') AND p."updated_at" > CURRENT_TIMESTAMP - INTERVAL '7 days'
+      AND NOT ${RETRY_OWED_SQL}
   `
   return Number(rows[0]?.n ?? 0)
 }

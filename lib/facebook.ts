@@ -1,5 +1,5 @@
 import { absoluteUrl } from '@/modules/social-hub/lib/media-url'
-import { asNumber, asRecord, asString, formBody, requestJson } from '@/modules/social-hub/lib/http'
+import { asNumber, asRecord, asString, formBody, PUBLISH_TIMEOUT_MS, requestJson } from '@/modules/social-hub/lib/http'
 import type { AppCredentials } from '@/modules/social-hub/lib/settings'
 import type { LoginResult, PublishInput, PublishResult, RemotePostInput, RemoteRead } from '@/modules/social-hub/lib/provider-types'
 import { SocialError } from '@/modules/social-hub/lib/types'
@@ -55,7 +55,7 @@ async function graphPost(path: string, token: string, values: Record<string, str
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/x-www-form-urlencoded' },
     body: formBody(values),
-  })
+  }, PUBLISH_TIMEOUT_MS)
   if (!res.ok) throw graphError(res.json, res.status)
   return asRecord(res.json)
 }
@@ -132,6 +132,31 @@ function messageWithLink(input: PublishInput): string {
     return input.body ? `${input.body}\n\n${input.linkUrl}` : input.linkUrl
   }
   return input.body
+}
+
+function sameWords(a: string, b: string): boolean {
+  return a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Has this post already reached the page? Asked before sending again after a timeout, because
+ * Facebook can take a post and still fail to tell us. Throws when it cannot say either way.
+ */
+export async function findPublishedOnFacebook(pageId: string, token: string, input: PublishInput, since: Date): Promise<PublishResult | null> {
+  const message = messageWithLink(input)
+  if (!message.trim()) throw new SocialError('This post has no words to look for on the page.')
+  const recent = await graphGet(`/${pageId}/posts`, token, { fields: 'id,message,created_time,permalink_url', limit: '25' })
+  const rows = Array.isArray(recent.data) ? recent.data : []
+  for (const row of rows) {
+    const r = asRecord(row)
+    const id = asString(r.id)
+    const created = Date.parse(asString(r.created_time) ?? '')
+    if (!id || !Number.isFinite(created) || created < since.getTime()) continue
+    if (!sameWords(asString(r.message) ?? '', message)) continue
+    const raw = asString(r.permalink_url)
+    return { externalId: id, permalink: raw ? (raw.startsWith('http') ? raw : `https://www.facebook.com${raw}`) : null }
+  }
+  return null
 }
 
 export async function publishToFacebook(pageId: string, token: string, input: PublishInput): Promise<PublishResult> {

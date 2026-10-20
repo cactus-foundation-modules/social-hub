@@ -95,6 +95,20 @@ export const LIMITS = {
 } as const
 
 /** Ones the screen can say plainly rather than showing a status code. */
+/** What a page is told when the network goes quiet mid-post. Auto-retry recognises it by this start. */
+export const TIMEOUT_ERROR_PREFIX = 'The network took too long to answer.'
+export const TIMEOUT_ERROR = `${TIMEOUT_ERROR_PREFIX} Try again in a minute.`
+export const INTERRUPTED_ERROR = 'This was interrupted part way. Check the page before retrying, in case it went out.'
+
+/** Said when an unattended retry could not tell whether the first attempt had already gone out, so it sent nothing. */
+export const UNCHECKED_ERROR =
+  'Facebook did not answer last time and the page could not be checked, so this was not sent again in case it already went out. Look at the page, then retry if it is not there.'
+
+/** True when the last attempt ended without an answer, so the post may well have gone out anyway. */
+export function outcomeUncertain(error: string | null): boolean {
+  return error !== null && (error.startsWith(TIMEOUT_ERROR_PREFIX) || error === INTERRUPTED_ERROR || error === UNCHECKED_ERROR)
+}
+
 export class SocialError extends Error {
   /** True when the network refused our credentials, so the page should be reconnected. */
   authFailure: boolean
