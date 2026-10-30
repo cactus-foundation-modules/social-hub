@@ -8,6 +8,7 @@ import { createState, STATE_COOKIE, STATE_TTL_SECONDS } from '@/modules/social-h
 import { callbackUrl, requestOrigin } from '@/modules/social-hub/lib/origin'
 import { getAppCredentials } from '@/modules/social-hub/lib/settings'
 import { PROVIDERS, type Provider } from '@/modules/social-hub/lib/types'
+import { publicOrigin } from '@/lib/security/public-origin'
 
 type Params = { params: Promise<{ provider: string }> }
 
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   const p = provider as Provider
 
   const creds = await getAppCredentials(p)
-  const redirect = callbackUrl(p, requestOrigin(request.headers, request.nextUrl.origin))
+  const redirect = callbackUrl(p, requestOrigin(request.headers, publicOrigin(request)))
   if (!creds) {
     return errorResponse('Save the app details for this network in Settings → Social Hub first.', 409)
   }

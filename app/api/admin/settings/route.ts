@@ -9,12 +9,13 @@ import { FB_GRAPH_VERSION, FB_SCOPES } from '@/modules/social-hub/lib/facebook'
 import { LI_SCOPES } from '@/modules/social-hub/lib/linkedin'
 import { callbackUrl, requestOrigin } from '@/modules/social-hub/lib/origin'
 import { getSettings, updateSettings } from '@/modules/social-hub/lib/settings'
+import { publicOrigin } from '@/lib/security/public-origin'
 
 async function view(request: Request) {
   const config = await prisma.siteConfig
     .findUnique({ where: { id: 'singleton' }, select: { adminPath: true } })
     .catch(() => null)
-  const siteUrl = requestOrigin(request.headers, new URL(request.url).origin)
+  const siteUrl = requestOrigin(request.headers, publicOrigin(request))
   return {
     ...(await getSettings()),
     siteUrl,

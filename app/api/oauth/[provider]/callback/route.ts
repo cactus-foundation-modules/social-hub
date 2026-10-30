@@ -8,6 +8,7 @@ import { completeConnection } from '@/modules/social-hub/lib/connect'
 import { STATE_COOKIE, readState } from '@/modules/social-hub/lib/oauth-state'
 import { syncAll } from '@/modules/social-hub/lib/sync'
 import { PROVIDERS, SocialError, type Provider } from '@/modules/social-hub/lib/types'
+import { publicOrigin } from '@/lib/security/public-origin'
 
 export const maxDuration = 60
 
@@ -17,7 +18,7 @@ async function back(request: NextRequest, query: Record<string, string>): Promis
   const config = await prisma.siteConfig
     .findUnique({ where: { id: 'singleton' }, select: { adminPath: true } })
     .catch(() => null)
-  const base = getSiteUrlOrNull() ?? request.nextUrl.origin
+  const base = getSiteUrlOrNull() ?? publicOrigin(request)
   const url = new URL(`${base}/${config?.adminPath ?? 'cactus-admin'}/config`)
   url.searchParams.set('tab', 'social-hub')
   url.searchParams.set('view', 'accounts')
