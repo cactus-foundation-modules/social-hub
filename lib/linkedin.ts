@@ -1,13 +1,11 @@
 import { absoluteUrl } from '@/modules/social-hub/lib/media-url'
-import { asNumber, asRecord, asString, formBody, requestJson } from '@/modules/social-hub/lib/http'
+import { asNumber, asRecord, asString, formBody, requestJson, type JsonResult } from '@/modules/social-hub/lib/http'
 import { escapeLinkedInText } from '@/modules/social-hub/lib/linkedin-text'
 import { readCapped, safeGet } from '@/modules/social-hub/lib/safe-fetch'
 import type { AppCredentials } from '@/modules/social-hub/lib/settings'
 import type { LoginResult, PublishInput, PublishResult, RemotePostInput, RemoteRead } from '@/modules/social-hub/lib/provider-types'
 import { SocialError } from '@/modules/social-hub/lib/types'
 
-/** LinkedIn versions its REST API by month and retires old ones after about a year. */
-export const LI_API_VERSION = '202510'
 const API = 'https://api.linkedin.com/rest'
 
 export const LI_SCOPES = ['r_organization_social', 'w_organization_social', 'rw_organization_admin'] as const
@@ -25,13 +23,56 @@ export function linkedInAuthUrl(creds: AppCredentials, redirectUri: string, stat
   return `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`
 }
 
-function apiHeaders(token: string, extra: Record<string, string> = {}): Record<string, string> {
-  return {
-    authorization: `Bearer ${token}`,
-    'linkedin-version': LI_API_VERSION,
-    'x-restli-protocol-version': '2.0.0',
-    ...extra,
+/**
+ * LinkedIn versions its REST API by month (YYYYMM) and retires each one after about a year,
+ * and the odd month never ships at all. A fixed pin therefore breaks on its own a year later
+ * ("Requested version 20251001 is not active"), so the version is worked out from today's date:
+ * last month first, stepping back a month whenever LinkedIn says the one asked for is not live.
+ */
+export function linkedInVersionCandidates(now: Date = new Date()): string[] {
+  const out: string[] = []
+  for (let back = 1; back <= 10; back++) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - back, 1))
+    out.push(`${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`)
   }
+  return out
+}
+
+/** True when LinkedIn refused the request only because of the version header. */
+export function isLinkedInVersionError(res: Pick<JsonResult, 'status' | 'json'>): boolean {
+  if (res.status !== 400 && res.status !== 426) return false
+  const body = asRecord(res.json)
+  const code = asString(body.code) ?? ''
+  if (code === 'NONEXISTENT_VERSION' || code === 'VERSION_MISSING') return true
+  return /version .*(not active|does not exist|nonexistent)/i.test(asString(body.message) ?? '')
+}
+
+// The version that last worked in this process, so only the first request after a rollover pays for the search.
+let liveVersion: string | null = null
+
+/** One call to LinkedIn's REST API with the protocol headers, retried across versions until one is live. */
+async function liRequest(path: string, token: string, init: RequestInit = {}): Promise<JsonResult> {
+  const candidates = linkedInVersionCandidates()
+  const order = liveVersion && candidates.includes(liveVersion)
+    ? [liveVersion, ...candidates.filter((v) => v !== liveVersion)]
+    : candidates
+  let res: JsonResult | null = null
+  for (const version of order) {
+    res = await requestJson(`${API}${path}`, {
+      ...init,
+      headers: {
+        authorization: `Bearer ${token}`,
+        'linkedin-version': version,
+        'x-restli-protocol-version': '2.0.0',
+        ...(init.headers as Record<string, string> | undefined),
+      },
+    })
+    if (!isLinkedInVersionError(res)) {
+      liveVersion = version
+      return res
+    }
+  }
+  return res!
 }
 
 export function linkedInError(json: unknown, status: number): SocialError {
@@ -94,7 +135,7 @@ export function refreshLinkedInToken(creds: AppCredentials, refreshToken: string
 }
 
 async function apiGet(path: string, token: string): Promise<{ json: unknown; status: number; ok: boolean }> {
-  const res = await requestJson(`${API}${path}`, { headers: apiHeaders(token) })
+  const res = await liRequest(path, token)
   return { json: res.json, status: res.status, ok: res.ok }
 }
 
@@ -150,9 +191,9 @@ async function fetchBytes(url: string): Promise<{ bytes: Uint8Array; type: strin
 
 /** Upload one picture for a page and answer its image URN. */
 async function uploadImage(orgUrn: string, token: string, url: string): Promise<string> {
-  const init = await requestJson(`${API}/images?action=initializeUpload`, {
+  const init = await liRequest('/images?action=initializeUpload', token, {
     method: 'POST',
-    headers: apiHeaders(token, { 'content-type': 'application/json' }),
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ initializeUploadRequest: { owner: orgUrn } }),
   })
   if (!init.ok) throw linkedInError(init.json, init.status)
@@ -220,9 +261,9 @@ export async function publishToLinkedIn(orgId: string, token: string, input: Pub
     post.content = { article }
   }
 
-  const res = await requestJson(`${API}/posts`, {
+  const res = await liRequest('/posts', token, {
     method: 'POST',
-    headers: apiHeaders(token, { 'content-type': 'application/json' }),
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify(post),
   })
   if (!res.ok) throw linkedInError(res.json, res.status)
@@ -308,9 +349,9 @@ async function socialCounts(urn: string, token: string): Promise<{ likes: number
 
 /** Take a post off the page. 'gone' when LinkedIn says it no longer exists. */
 export async function deleteLinkedInPost(token: string, urn: string): Promise<'deleted' | 'gone'> {
-  const res = await requestJson(`${API}/posts/${encodeURIComponent(urn)}`, {
+  const res = await liRequest(`/posts/${encodeURIComponent(urn)}`, token, {
     method: 'DELETE',
-    headers: apiHeaders(token, { 'x-restli-method': 'DELETE' }),
+    headers: { 'x-restli-method': 'DELETE' },
   })
   if (res.ok) return 'deleted'
   if (res.status === 404) return 'gone'
