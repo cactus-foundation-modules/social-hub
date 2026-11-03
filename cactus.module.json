@@ -1,6 +1,6 @@
 {
   "name": "social-hub",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "tablePrefix": "shub_",
   "notificationKinds": [
     {"id": "attention", "label": "Social Hub needs attention", "description": "A connected account, post or schedule needs a look.", "dedupePrefix": "social-hub:attention"}
