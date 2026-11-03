@@ -57,7 +57,8 @@ export function LinkedInPanel({ settings, draft, onChange }: Props) {
           </li>
           <li>
             <strong>Check the permissions.</strong> Still on the <strong>Auth</strong> tab, the <strong>OAuth 2.0 scopes</strong> list should include
-            <Code>r_organization_social</Code>, <Code>w_organization_social</Code> and <Code>rw_organization_admin</Code>. If they are missing, the Community Management API has not been approved yet.
+            <Code>r_organization_social</Code>, <Code>r_organization_social_feed</Code>, <Code>w_organization_social</Code> and <Code>rw_organization_admin</Code>. If they are missing, the Community Management API has not been approved yet.
+            Without <Code>r_organization_social_feed</Code> posting still works, but like and comment counts stay blank.
           </li>
           <li>
             <strong>Copy the app details here.</strong> From the <strong>Auth</strong> tab copy the <strong>Client ID</strong> and the <strong>Primary Client Secret</strong> (use the eye icon to reveal it)

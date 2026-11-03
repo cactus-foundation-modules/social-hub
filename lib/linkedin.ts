@@ -8,17 +8,25 @@ import { SocialError } from '@/modules/social-hub/lib/types'
 
 const API = 'https://api.linkedin.com/rest'
 
-export const LI_SCOPES = ['r_organization_social', 'w_organization_social', 'rw_organization_admin'] as const
+// r_organization_social_feed is what LinkedIn's socialActions endpoint checks before handing over like and comment counts.
+export const LI_SCOPES = ['r_organization_social', 'r_organization_social_feed', 'w_organization_social', 'rw_organization_admin'] as const
+/** The older set, for apps whose Auth tab does not offer the counts permission: posting still works, the counts do not. */
+export const LI_SCOPES_BASIC = ['r_organization_social', 'w_organization_social', 'rw_organization_admin'] as const
+
+/** True when LinkedIn turned the sign-in down because the app is not allowed one of the permissions asked for. */
+export function isLinkedInScopeRefusal(error: string | null): boolean {
+  return error === 'unauthorized_scope_error'
+}
 
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
 
-export function linkedInAuthUrl(creds: AppCredentials, redirectUri: string, state: string): string {
+export function linkedInAuthUrl(creds: AppCredentials, redirectUri: string, state: string, basic = false): string {
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: creds.clientId,
     redirect_uri: redirectUri,
     state,
-    scope: LI_SCOPES.join(' '),
+    scope: (basic ? LI_SCOPES_BASIC : LI_SCOPES).join(' '),
   })
   return `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`
 }
@@ -336,15 +344,40 @@ async function resolveImages(urns: string[], token: string): Promise<Map<string,
   return out
 }
 
-async function socialCounts(urn: string, token: string): Promise<{ likes: number | null; comments: number | null }> {
-  const res = await apiGet(`/socialActions/${encodeURIComponent(urn)}`, token)
-  if (!res.ok) return { likes: null, comments: null }
+export type SocialCounts =
+  | { ok: true; likes: number; comments: number }
+  | { ok: false; status: number; reason: string | null }
+
+/**
+ * Reads one socialActions summary. LinkedIn leaves likesSummary or commentsSummary out entirely
+ * (and answers {} for a post nobody has touched) when there is nothing to count, so a missing
+ * summary on a successful answer is a zero, not a refusal.
+ */
+export function readSocialCounts(res: Pick<JsonResult, 'ok' | 'status' | 'json'>): SocialCounts {
   const body = asRecord(res.json)
+  if (!res.ok) return { ok: false, status: res.status, reason: asString(body.message) }
+  const likes = asRecord(body.likesSummary)
+  const comments = asRecord(body.commentsSummary)
   return {
-    likes: asNumber(asRecord(body.likesSummary).totalLikes),
-    comments: asNumber(asRecord(body.commentsSummary).aggregatedTotalComments) ??
-      asNumber(asRecord(body.commentsSummary).totalFirstLevelComments),
+    ok: true,
+    likes: asNumber(likes.totalLikes) ?? asNumber(likes.aggregatedTotalLikes) ?? 0,
+    comments: asNumber(comments.aggregatedTotalComments) ?? asNumber(comments.totalFirstLevelComments) ?? 0,
   }
+}
+
+async function socialCounts(urn: string, token: string): Promise<SocialCounts> {
+  return readSocialCounts(await apiGet(`/socialActions/${encodeURIComponent(urn)}`, token))
+}
+
+/** The read notice for the counts, or null when at least one post's counts came back. */
+export function countsNotice(results: (SocialCounts | null)[]): string | null {
+  if (results.length === 0 || results.some((r) => r?.ok)) return null
+  const refused = results.find((r): r is Extract<SocialCounts, { ok: false }> => !!r && !r.ok)
+  const said = refused?.reason ? ` LinkedIn said: ${refused.reason}` : ''
+  if (refused && (refused.status === 401 || refused.status === 403)) {
+    return `LinkedIn would not share like and comment counts.${said} Reconnect this page so LinkedIn can ask for the counts permission; if it still refuses, open your app on LinkedIn's developer site, check the Auth tab lists r_organization_social_feed, then reconnect.`
+  }
+  return `LinkedIn would not share like and comment counts.${said || ' It did not say why.'} They will be tried again on the next read.`
 }
 
 /** Take a post off the page. 'gone' when LinkedIn says it no longer exists. */
@@ -387,22 +420,21 @@ export async function fetchLinkedInPosts(orgId: string, token: string): Promise<
   }
 
   const images = await resolveImages(rows.flatMap((r) => r.urns), token)
-  const counts = await Promise.allSettled(rows.slice(0, 10).map((r) => socialCounts(r.post.externalId, token)))
+  const settled = await Promise.allSettled(rows.slice(0, 10).map((r) => socialCounts(r.post.externalId, token)))
+  const counts = settled.map((c) => (c.status === 'fulfilled' ? c.value : null))
   const posts = rows.map((r, i) => {
-    const c = counts[i]
-    const found = c && c.status === 'fulfilled' ? c.value : null
+    const found = counts[i]
     return {
       ...r.post,
       imageUrls: r.urns.map((u) => images.get(u)).filter((u): u is string => !!u).slice(0, 6),
-      likeCount: found?.likes ?? null,
-      commentCount: found?.comments ?? null,
+      likeCount: found?.ok ? found.likes : null,
+      commentCount: found?.ok ? found.comments : null,
     }
   })
   const parts: string[] = []
-  // The counts are asked for the ten newest posts. None coming back at all means LinkedIn refused, not that there are none.
-  if (posts.length > 0 && posts.slice(0, 10).every((p) => p.likeCount === null && p.commentCount === null)) {
-    parts.push('LinkedIn would not share like and comment counts. Reconnect this page to grant them; if that does not help, check the app has the Community Management API approved.')
-  }
+  // The counts are asked for the ten newest posts; only every one of those failing counts as LinkedIn refusing.
+  const notice = countsNotice(counts)
+  if (notice) parts.push(notice)
   if (stoppedEarly) parts.push(`Older posts could not be read: ${stoppedEarly}`)
   return { posts, notice: parts.length ? parts.join(' ') : null }
 }

@@ -26,7 +26,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   }
 
   const { state, cookie } = createState(p, g.access.userId, redirect)
-  const url = p === 'facebook' ? facebookAuthUrl(creds, redirect, state) : linkedInAuthUrl(creds, redirect, state)
+  const url = p === 'facebook' ? facebookAuthUrl(creds, redirect, state) : linkedInAuthUrl(creds, redirect, state, request.nextUrl.searchParams.get('basic') === '1')
   const res = NextResponse.redirect(url)
   res.cookies.set(STATE_COOKIE, cookie, {
     httpOnly: true,

@@ -2,6 +2,10 @@
 
 const FAQ: { q: string; a: string }[] = [
   {
+    q: 'LinkedIn says it will not share like and comment counts.',
+    a: 'LinkedIn hands those over only with the r_organization_social_feed permission. Press Reconnect on the Accounts tab and approve what LinkedIn asks. If LinkedIn skips straight back without asking, or the message stays, open your app on LinkedIn\'s developer site and check the Auth tab lists r_organization_social_feed (it comes with the Community Management API), then reconnect.',
+  },
+  {
     q: 'Facebook says it requires the pages_read_engagement permission.',
     a: 'Your Facebook app uses Facebook Login for Business, which only grants the permissions in a saved configuration. In the Facebook app open Facebook Login for Business → Configurations, create one with pages_show_list, pages_read_engagement and pages_manage_posts (login variation General, User access token), paste its Configuration ID into the Facebook setup tab, save, then press Reconnect on the Accounts tab. The Testing and App Review screens in the Facebook dashboard are not needed for pages you administer yourself.',
   },
