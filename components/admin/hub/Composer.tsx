@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LIMITS, PROVIDER_LABEL, type Connection, type LinkPreview, type Post, type PostImage, type PostMode, type Provider } from '@/modules/social-hub/lib/types'
 import { firstUrl } from '@/modules/social-hub/lib/urls'
+import { linkedInCommentary, linkedInImages } from '@/modules/social-hub/lib/linkedin-text'
 import { api } from '@/modules/social-hub/components/admin/hub/api'
 import { Avatar, LinkCard, MediaGrid, PostText } from '@/modules/social-hub/components/admin/hub/Parts'
 import { MediaSheet } from '@/modules/social-hub/components/admin/hub/MediaSheet'
@@ -14,7 +15,9 @@ type Props = {
   editing: Post | null
   /**
    * Start a new post from something that already exists elsewhere: the words, the
-   * address to attach as a link card, and which network's pages to tick.
+   * address to attach as a link card, and which network's pages to tick. For
+   * LinkedIn the address goes at the foot of the words and the page's picture is
+   * attached as a photo instead, so what is on screen is what goes out.
    */
   prefill?: { text: string; linkUrl: string; provider: Provider }
   /** Called after a save that should refresh the lists. `message` is shown as a notice. */
@@ -32,7 +35,9 @@ function nineAm(daysAhead: number, weekday?: number): Date {
 
 export function Composer({ connections, editing, prefill, onSaved, onClose }: Props) {
   const usable = useMemo(() => connections.filter((c) => c.status === 'active'), [connections])
-  const [text, setText] = useState(editing?.body ?? prefill?.text ?? '')
+  const [text, setText] = useState(
+    editing?.body ?? (prefill ? (prefill.provider === 'linkedin' ? linkedInCommentary(prefill.text, prefill.linkUrl) : prefill.text) : ''),
+  )
   const [images, setImages] = useState<PostImage[]>(editing?.images ?? [])
   const [chosen, setChosen] = useState<string[]>(
     editing
@@ -59,18 +64,24 @@ export function Composer({ connections, editing, prefill, onSaved, onClose }: Pr
   const [error, setError] = useState('')
   const [previewOf, setPreviewOf] = useState<Provider | null>(null)
 
-  const loadPreview = useCallback(async (url: string) => {
+  const loadPreview = useCallback(async (url: string): Promise<LinkPreview> => {
     setLinkLoading(true)
     const res = await api<{ preview: LinkPreview }>('/admin/link-preview', { method: 'POST', body: { url } })
     setLinkLoading(false)
-    if (res.ok) setLink(res.data.preview)
-    else setLink({ url, title: null, description: null, imageUrl: null, siteName: null })
+    const preview = res.ok ? res.data.preview : { url, title: null, description: null, imageUrl: null, siteName: null }
+    setLink(preview)
+    return preview
   }, [])
 
   // A prefilled address gets its picture and description the same way a pasted one does.
   useEffect(() => {
+    if (!prefill) return
     // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch on open; state is set after the response, never synchronously
-    if (prefill) void loadPreview(prefill.linkUrl)
+    void loadPreview(prefill.linkUrl).then((preview) => {
+      const picture = preview.imageUrl
+      if (prefill.provider !== 'linkedin' || !picture) return
+      setImages((cur) => (cur.length > 0 ? cur : [{ url: picture, alt: preview.title ?? undefined }]))
+    })
   }, [prefill, loadPreview])
 
   // A link typed into the text turns into a preview card, once, unless it has been dismissed.
@@ -254,9 +265,23 @@ export function Composer({ connections, editing, prefill, onSaved, onClose }: Pr
                     )
                   })()}
                 </div>
-                <PostText text={text} />
-                <MediaGrid urls={images.map((i) => i.url)} proxy={false} />
-                {link && images.length === 0 && <LinkCard url={link.url} title={link.title} description={link.description} imageUrl={link.imageUrl} />}
+                {activePreview === 'linkedin' ? (() => {
+                  // As LinkedIn will get it: the link at the foot, the link's picture standing in for a photo.
+                  const pictures = linkedInImages({ images, linkImageUrl: link?.imageUrl ?? null, linkTitle: link?.title ?? null })
+                  return (
+                    <>
+                      <PostText text={linkedInCommentary(text, link?.url ?? null)} />
+                      <MediaGrid urls={pictures.map((i) => i.url)} proxy={images.length === 0} />
+                      {link && pictures.length === 0 && <LinkCard url={link.url} title={link.title} description={link.description} imageUrl={link.imageUrl} />}
+                    </>
+                  )
+                })() : (
+                  <>
+                    <PostText text={text} />
+                    <MediaGrid urls={images.map((i) => i.url)} proxy={false} />
+                    {link && images.length === 0 && <LinkCard url={link.url} title={link.title} description={link.description} imageUrl={link.imageUrl} />}
+                  </>
+                )}
               </div>
             </div>
           )}

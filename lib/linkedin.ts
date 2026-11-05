@@ -1,6 +1,6 @@
 import { absoluteUrl } from '@/modules/social-hub/lib/media-url'
 import { asNumber, asRecord, asString, formBody, requestJson, type JsonResult } from '@/modules/social-hub/lib/http'
-import { escapeLinkedInText } from '@/modules/social-hub/lib/linkedin-text'
+import { escapeLinkedInText, linkedInCommentary, linkedInImages } from '@/modules/social-hub/lib/linkedin-text'
 import { readCapped, safeGet } from '@/modules/social-hub/lib/safe-fetch'
 import type { AppCredentials } from '@/modules/social-hub/lib/settings'
 import type { LoginResult, PublishInput, PublishResult, RemotePostInput, RemoteRead } from '@/modules/social-hub/lib/provider-types'
@@ -237,24 +237,6 @@ async function uploadImage(orgUrn: string, token: string, url: string): Promise<
   }
   if (!put.ok) throw new SocialError(`LinkedIn rejected the picture upload (${put.status}).`)
   return image
-}
-
-/** The post's text with its link at the foot, unless the text already carries it. */
-export function linkedInCommentary(body: string, linkUrl: string | null): string {
-  if (!linkUrl || body.includes(linkUrl)) return body
-  const text = body.trimEnd()
-  return text ? `${text}\n\n${linkUrl}` : linkUrl
-}
-
-/**
- * The pictures a LinkedIn post carries: its own, or failing that the link's
- * picture, so a shared article goes out as a picture post with the address
- * in the text rather than a link card LinkedIn often shows bare.
- */
-export function linkedInImages(input: PublishInput): PostImage[] {
-  if (input.images.length > 0) return input.images.slice(0, 4)
-  if (input.linkImageUrl) return [{ url: input.linkImageUrl, alt: input.linkTitle ?? undefined }]
-  return []
 }
 
 async function uploadAll(orgUrn: string, token: string, images: PostImage[]): Promise<Record<string, unknown>> {

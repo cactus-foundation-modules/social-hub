@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { linkedInCommentary, linkedInImages } from '@/modules/social-hub/lib/linkedin'
+import { linkedInCommentary, linkedInImages } from '@/modules/social-hub/lib/linkedin-text'
 import type { PublishInput } from '@/modules/social-hub/lib/provider-types'
 
 const base: PublishInput = { body: 'Read this', linkUrl: null, linkTitle: null, linkDescription: null, linkImageUrl: null, images: [] }
@@ -17,7 +17,7 @@ describe('linkedInCommentary', () => {
 
 describe('linkedInImages', () => {
   it("uses the link's picture when the post has none of its own", () => {
-    expect(linkedInImages({ ...base, linkUrl: 'https://example.com/a', linkTitle: 'A post', linkImageUrl: 'https://cdn.example.com/a.webp' }))
+    expect(linkedInImages({ ...base, linkTitle: 'A post', linkImageUrl: 'https://cdn.example.com/a.webp' }))
       .toEqual([{ url: 'https://cdn.example.com/a.webp', alt: 'A post' }])
   })
   it("prefers the post's own pictures, at most four", () => {
@@ -25,6 +25,6 @@ describe('linkedInImages', () => {
     expect(linkedInImages({ ...base, images: own, linkImageUrl: 'https://cdn.example.com/a.webp' })).toEqual(own.slice(0, 4))
   })
   it('has nothing to attach without a picture', () => {
-    expect(linkedInImages({ ...base, linkUrl: 'https://example.com/a' })).toEqual([])
+    expect(linkedInImages(base)).toEqual([])
   })
 })
