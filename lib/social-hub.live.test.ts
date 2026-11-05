@@ -66,8 +66,8 @@ describe.runIf(shouldRun)('Social Hub against a real database', () => {
   let liId = ''
 
   beforeAll(async () => {
-    if (!process.env.OVH_SERVER || !process.env.OVH_USER || !process.env.OVH_PASSWORD) {
-      throw new Error('OVH_SERVER, OVH_USER and OVH_PASSWORD are needed for this suite. Export them from the Deskwell workspace .env - a skip here is a fail.')
+    if (!process.env.OVH_SERVER || !process.env.OVH_USER || !(process.env.OVH_SSH_KEY || process.env.OVH_PASSWORD)) {
+      throw new Error('OVH_SERVER, OVH_USER and OVH_SSH_KEY (or OVH_PASSWORD) are needed for this suite - a skip here is a fail.')
     }
     vps = vpsConfigFromEnv()
     await dropStaleTestObjects(vps)
@@ -256,7 +256,7 @@ describe.runIf(shouldRun)('Social Hub against a real database', () => {
 
     // The commentary LinkedIn saw had its brackets escaped.
     const liCall = (fetch as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls.find(([u]) => u.includes('/rest/posts'))
-    expect(JSON.parse(String(liCall?.[1].body))).toMatchObject({ author: 'urn:li:organization:777', commentary: 'Both \\(please\\)', content: { article: { source: 'https://example.com' } } })
+    expect(JSON.parse(String(liCall?.[1].body))).toMatchObject({ author: 'urn:li:organization:777', commentary: 'Both \\(please\\)\n\nhttps://example.com', content: { article: { source: 'https://example.com' } } })
 
     // Reconnect LinkedIn, retry: Facebook is not posted a second time.
     await conns.upsertConnection({

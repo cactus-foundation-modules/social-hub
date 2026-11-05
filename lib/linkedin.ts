@@ -4,7 +4,7 @@ import { escapeLinkedInText } from '@/modules/social-hub/lib/linkedin-text'
 import { readCapped, safeGet } from '@/modules/social-hub/lib/safe-fetch'
 import type { AppCredentials } from '@/modules/social-hub/lib/settings'
 import type { LoginResult, PublishInput, PublishResult, RemotePostInput, RemoteRead } from '@/modules/social-hub/lib/provider-types'
-import { SocialError } from '@/modules/social-hub/lib/types'
+import { SocialError, type PostImage } from '@/modules/social-hub/lib/types'
 
 const API = 'https://api.linkedin.com/rest'
 
@@ -189,12 +189,25 @@ function permalinkFor(urn: string): string {
   return `https://www.linkedin.com/feed/update/${urn}`
 }
 
+// LinkedIn's Images API takes JPG, PNG and GIF only. Anything else (the media
+// library serves WebP) is accepted at upload and then never shows, so it is
+// turned into a JPEG on the way out.
+const LINKEDIN_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif'])
+
 async function fetchBytes(url: string): Promise<{ bytes: Uint8Array; type: string }> {
   const target = absoluteUrl(url)
   const { response } = await safeGet(target)
   if (!response.ok) throw new SocialError('A picture on this post could not be downloaded.')
   const bytes = await readCapped(response, MAX_IMAGE_BYTES)
-  return { bytes, type: response.headers.get('content-type') ?? 'application/octet-stream' }
+  const type = (response.headers.get('content-type') ?? '').split(';')[0]!.trim().toLowerCase()
+  if (LINKEDIN_IMAGE_TYPES.has(type)) return { bytes, type }
+  try {
+    const sharp = (await import('sharp')).default
+    const jpeg = await sharp(bytes, { failOn: 'none' }).flatten({ background: '#ffffff' }).jpeg({ quality: 90 }).toBuffer()
+    return { bytes: new Uint8Array(jpeg), type: 'image/jpeg' }
+  } catch {
+    throw new SocialError('A picture on this post is in a format LinkedIn cannot show.')
+  }
 }
 
 /** Upload one picture for a page and answer its image URN. */
@@ -226,13 +239,40 @@ async function uploadImage(orgUrn: string, token: string, url: string): Promise<
   return image
 }
 
+/** The post's text with its link at the foot, unless the text already carries it. */
+export function linkedInCommentary(body: string, linkUrl: string | null): string {
+  if (!linkUrl || body.includes(linkUrl)) return body
+  const text = body.trimEnd()
+  return text ? `${text}\n\n${linkUrl}` : linkUrl
+}
+
+/**
+ * The pictures a LinkedIn post carries: its own, or failing that the link's
+ * picture, so a shared article goes out as a picture post with the address
+ * in the text rather than a link card LinkedIn often shows bare.
+ */
+export function linkedInImages(input: PublishInput): PostImage[] {
+  if (input.images.length > 0) return input.images.slice(0, 4)
+  if (input.linkImageUrl) return [{ url: input.linkImageUrl, alt: input.linkTitle ?? undefined }]
+  return []
+}
+
+async function uploadAll(orgUrn: string, token: string, images: PostImage[]): Promise<Record<string, unknown>> {
+  if (images.length === 1) {
+    const id = await uploadImage(orgUrn, token, images[0]!.url)
+    return { media: { id, altText: images[0]!.alt || undefined } }
+  }
+  const uploaded: { id: string; altText?: string }[] = []
+  for (const image of images) {
+    uploaded.push({ id: await uploadImage(orgUrn, token, image.url), altText: image.alt || undefined })
+  }
+  return { multiImage: { images: uploaded } }
+}
+
 export async function publishToLinkedIn(orgId: string, token: string, input: PublishInput): Promise<PublishResult> {
   const orgUrn = `urn:li:organization:${orgId}`
-  const images = input.images.slice(0, 4)
-  let text = input.body
-  if (input.linkUrl && images.length > 0 && !text.includes(input.linkUrl)) {
-    text = text ? `${text}\n\n${input.linkUrl}` : input.linkUrl
-  }
+  const images = linkedInImages(input)
+  const text = linkedInCommentary(input.body, input.linkUrl)
 
   const post: Record<string, unknown> = {
     author: orgUrn,
@@ -243,29 +283,22 @@ export async function publishToLinkedIn(orgId: string, token: string, input: Pub
     isReshareDisabledByAuthor: false,
   }
 
-  if (images.length === 1) {
-    const id = await uploadImage(orgUrn, token, images[0]!.url)
-    post.content = { media: { id, altText: images[0]!.alt || undefined } }
-  } else if (images.length > 1) {
-    const uploaded: { id: string; altText?: string }[] = []
-    for (const image of images) {
-      uploaded.push({ id: await uploadImage(orgUrn, token, image.url), altText: image.alt || undefined })
+  if (input.images.length > 0) {
+    post.content = await uploadAll(orgUrn, token, images)
+  } else if (images.length > 0) {
+    // Only the link's picture: if it will not go, the post still goes out as a link card.
+    try {
+      post.content = await uploadAll(orgUrn, token, images)
+    } catch (err) {
+      if (err instanceof SocialError && err.authFailure) throw err
     }
-    post.content = { multiImage: { images: uploaded } }
-  } else if (input.linkUrl) {
+  }
+  if (!post.content && input.linkUrl) {
     const article: Record<string, unknown> = {
       source: input.linkUrl,
       title: input.linkTitle || input.linkUrl,
     }
     if (input.linkDescription) article.description = input.linkDescription.slice(0, 250)
-    if (input.linkImageUrl) {
-      // A thumbnail is a nicety: the post should still go out without one.
-      try {
-        article.thumbnail = await uploadImage(orgUrn, token, input.linkImageUrl)
-      } catch {
-        // posted without a thumbnail
-      }
-    }
     post.content = { article }
   }
 
