@@ -253,7 +253,8 @@ export default function SocialHubApp() {
             <Masonry>
               {local.map((p) => (
                 <LocalPostRow
-                  key={p.id}
+                  // A new key on each filter change drops a card's own icon pick, so the filter always wins.
+                  key={`${p.id}:${filter ?? 'all'}`}
                   post={p}
                   focus={connections.find((c) => c.id === filter)?.provider ?? null}
                   busy={busyId === p.id}
