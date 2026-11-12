@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { PROVIDER_LABEL, type Post, type Provider, type RemotePost } from '@/modules/social-hub/lib/types'
 import { LinkCard, NetworkAvatar, MediaGrid, PostMenu, PostText, RemoteLinkCard, StatusPill, ViewLink, type PostMenuItem } from '@/modules/social-hub/components/admin/hub/Parts'
 import { linkedInCommentary, linkedInImages } from '@/modules/social-hub/lib/linkedin-text'
@@ -82,13 +83,20 @@ export function LocalPostRow({
   const canEdit = post.status === 'draft' || post.status === 'scheduled' || post.status === 'failed'
   const going = post.status === 'publishing'
   const first = post.targets[0]
+  // One card, one post, but each network gets its own version: the icons pick which one is drawn.
+  const providers = [...new Set(post.targets.map((t) => t.provider))]
+  const [picked, setPicked] = useState<Provider | null>(null)
+  const shown: Provider | null =
+    (picked && providers.includes(picked) ? picked : null) ??
+    (focus && providers.includes(focus) ? focus : null) ??
+    (providers.includes('linkedin') ? 'linkedin' : providers[0] ?? null)
   // As LinkedIn will get it: the link at the foot of the text, the link's picture standing in for a photo.
-  const asLinkedIn = focus ? focus === 'linkedin' : post.targets.some((t) => t.provider === 'linkedin')
+  const asLinkedIn = shown === 'linkedin'
   const linkedInPictures = linkedInImages({ images: post.images, linkImageUrl: post.linkImageUrl, linkTitle: post.linkTitle })
   return (
     <article className="shub-row">
       <div className="shub-post-head">
-        {first ? <NetworkAvatar providers={post.targets.map((t) => t.provider)} name={first.connectionName} /> : <span className="shub-avatar"><Icon name="edit" size={14} /></span>}
+        {first ? <NetworkAvatar providers={providers} name={first.connectionName} selected={shown} onSelect={setPicked} /> : <span className="shub-avatar"><Icon name="edit" size={14} /></span>}
         <div className="shub-post-who">
           <div className="shub-post-name">
             {pagesLabel(post.targets.map((t) => t.connectionName))}
@@ -108,9 +116,7 @@ export function LocalPostRow({
           {post.linkUrl && linkedInPictures.length === 0 && (
             <LinkCard url={post.linkUrl} title={post.linkTitle} description={post.linkDescription} imageUrl={post.linkImageUrl} />
           )}
-          {!focus && post.targets.some((t) => t.provider !== 'linkedin') && (
-            <p className="shub-hint">Shown as LinkedIn will get it; Facebook gets a link card.</p>
-          )}
+          {providers.length > 1 && <p className="shub-hint">The LinkedIn version. Press the Facebook icon to see Facebook&apos;s.</p>}
         </>
       ) : (
         <>
@@ -119,6 +125,7 @@ export function LocalPostRow({
           {post.linkUrl && post.images.length === 0 && (
             <LinkCard url={post.linkUrl} title={post.linkTitle} description={post.linkDescription} imageUrl={post.linkImageUrl} />
           )}
+          {providers.length > 1 && <p className="shub-hint">The Facebook version. Press the LinkedIn icon to see LinkedIn&apos;s.</p>}
         </>
       )}
       {post.targets.length > 1 && (

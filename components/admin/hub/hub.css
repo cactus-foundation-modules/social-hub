@@ -62,6 +62,10 @@
 .shub-avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
 .shub-avatar--net { color: var(--color-text); }
 .shub-netavatar { display: inline-flex; flex: none; }
+.shub-avatar--pick { cursor: pointer; font: inherit; padding: 0; opacity: 0.55; }
+.shub-avatar--pick:hover { opacity: 0.85; }
+.shub-avatar--pick[aria-pressed='true'] { opacity: 1; background: var(--color-primary-subtle); border-color: var(--color-primary-border); position: relative; z-index: 1; }
+.shub-avatar--pick:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
 .shub-netavatar .shub-avatar + .shub-avatar { margin-left: -0.5rem; }
 .shub-avatar--lg { width: 2.5rem; height: 2.5rem; font-size: 0.9rem; }
 .shub-avatar-badge {

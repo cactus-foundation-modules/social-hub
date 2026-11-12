@@ -23,11 +23,23 @@ export function Avatar({ name, pictureUrl, provider, large }: { name: string; pi
 }
 
 /** A post's network as a round icon, in place of a page-name initial. Several networks overlap. */
-export function NetworkAvatar({ providers, name }: { providers: Provider[]; name: string }) {
+export function NetworkAvatar({ providers, name, selected, onSelect }: { providers: Provider[]; name: string; selected?: Provider | null; onSelect?: (p: Provider) => void }) {
   const unique = [...new Set(providers)]
+  // With several networks and a handler, each icon is a button that picks which network's version is shown.
+  const pickable = !!onSelect && unique.length > 1
   return (
     <span className="shub-netavatar" title={name}>
-      {unique.map((p) => (
+      {unique.map((p) => pickable ? (
+        <button
+          key={p}
+          type="button"
+          className="shub-avatar shub-avatar--net shub-avatar--pick"
+          aria-pressed={selected === p}
+          aria-label={`Show the ${PROVIDER_LABEL[p]} version`}
+          title={`Show the ${PROVIDER_LABEL[p]} version`}
+          onClick={() => onSelect(p)}
+        ><ProviderGlyph provider={p} size={14} /></button>
+      ) : (
         <span key={p} className="shub-avatar shub-avatar--net" title={PROVIDER_LABEL[p]}><ProviderGlyph provider={p} size={14} /></span>
       ))}
     </span>
