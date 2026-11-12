@@ -1,15 +1,15 @@
 'use client'
 
-import { PROVIDER_LABEL, type Connection, type Post, type RemotePost } from '@/modules/social-hub/lib/types'
-import { Avatar, LinkCard, MediaGrid, PostMenu, PostText, RemoteLinkCard, StatusPill, ViewLink, type PostMenuItem } from '@/modules/social-hub/components/admin/hub/Parts'
+import { PROVIDER_LABEL, type Post, type Provider, type RemotePost } from '@/modules/social-hub/lib/types'
+import { LinkCard, NetworkAvatar, MediaGrid, PostMenu, PostText, RemoteLinkCard, StatusPill, ViewLink, type PostMenuItem } from '@/modules/social-hub/components/admin/hub/Parts'
+import { linkedInCommentary, linkedInImages } from '@/modules/social-hub/lib/linkedin-text'
 import { fullDateTime, relativeTime } from '@/modules/social-hub/components/admin/hub/format'
 import { Icon } from '@/modules/social-hub/components/admin/hub/Glyphs'
 
 export function RemotePostRow({
-  post, connection, busy, onEdit, onDelete,
+  post, busy, onEdit, onDelete,
 }: {
   post: RemotePost
-  connection: Connection | undefined
   busy?: boolean
   /** Present only for someone allowed to edit, on a network that lets live posts be edited. */
   onEdit?: (post: RemotePost) => void
@@ -31,7 +31,7 @@ export function RemotePostRow({
   return (
     <article className="shub-row">
       <div className="shub-post-head">
-        <Avatar name={post.connectionName} pictureUrl={connection?.pictureUrl ?? null} provider={post.provider} />
+        <NetworkAvatar providers={[post.provider]} name={post.connectionName} />
         <div className="shub-post-who">
           <div className="shub-post-name">{post.connectionName}</div>
           <div className="shub-post-when" title={fullDateTime(post.postedAt)}>{relativeTime(post.postedAt)}</div>
@@ -60,11 +60,19 @@ const STATUS_TONE: Record<Post['status'], 'ok' | 'warn' | 'bad' | 'info' | undef
   draft: undefined, scheduled: 'info', publishing: 'info', published: 'ok', partial: 'warn', failed: 'bad',
 }
 
+/** The page name when every target shares it (a Facebook and a LinkedIn page often do), else a count. */
+function pagesLabel(names: string[]): string {
+  const unique = [...new Set(names)]
+  if (unique.length === 0) return 'No page chosen yet'
+  return unique.length === 1 ? unique[0]! : `${unique.length} pages`
+}
+
 export function LocalPostRow({
-  post, connections, busy, onEdit, onPublish, onDelete,
+  post, focus = null, busy, onEdit, onPublish, onDelete,
 }: {
   post: Post
-  connections: Connection[]
+  /** The network the list is filtered to, so the preview shows that network's version of the post. */
+  focus?: Provider | null
   busy: boolean
   onEdit: (post: Post) => void
   onPublish: (post: Post) => void
@@ -74,14 +82,16 @@ export function LocalPostRow({
   const canEdit = post.status === 'draft' || post.status === 'scheduled' || post.status === 'failed'
   const going = post.status === 'publishing'
   const first = post.targets[0]
-  const firstConn = first ? connections.find((c) => c.id === first.connectionId) : undefined
+  // As LinkedIn will get it: the link at the foot of the text, the link's picture standing in for a photo.
+  const asLinkedIn = focus ? focus === 'linkedin' : post.targets.some((t) => t.provider === 'linkedin')
+  const linkedInPictures = linkedInImages({ images: post.images, linkImageUrl: post.linkImageUrl, linkTitle: post.linkTitle })
   return (
     <article className="shub-row">
       <div className="shub-post-head">
-        {first ? <Avatar name={first.connectionName} pictureUrl={firstConn?.pictureUrl ?? null} provider={first.provider} /> : <span className="shub-avatar"><Icon name="edit" size={14} /></span>}
+        {first ? <NetworkAvatar providers={post.targets.map((t) => t.provider)} name={first.connectionName} /> : <span className="shub-avatar"><Icon name="edit" size={14} /></span>}
         <div className="shub-post-who">
           <div className="shub-post-name">
-            {post.targets.length === 0 ? 'No page chosen yet' : post.targets.length === 1 ? first!.connectionName : `${post.targets.length} pages`}
+            {pagesLabel(post.targets.map((t) => t.connectionName))}
           </div>
           <div className="shub-post-when">
             {post.status === 'scheduled' || (post.scheduledAt && post.status === 'publishing')
@@ -91,10 +101,25 @@ export function LocalPostRow({
         </div>
         <StatusPill tone={STATUS_TONE[post.status]}>{STATUS_LABEL[post.status]}</StatusPill>
       </div>
-      <PostText text={post.body || (post.linkUrl ? '' : 'No text')} />
-      <MediaGrid urls={post.images.map((i) => i.url)} proxy={false} />
-      {post.linkUrl && post.images.length === 0 && (
-        <LinkCard url={post.linkUrl} title={post.linkTitle} description={post.linkDescription} imageUrl={post.linkImageUrl} />
+      {asLinkedIn ? (
+        <>
+          <PostText text={linkedInCommentary(post.body, post.linkUrl) || 'No text'} />
+          <MediaGrid urls={linkedInPictures.map((i) => i.url)} proxy={post.images.length === 0} />
+          {post.linkUrl && linkedInPictures.length === 0 && (
+            <LinkCard url={post.linkUrl} title={post.linkTitle} description={post.linkDescription} imageUrl={post.linkImageUrl} />
+          )}
+          {!focus && post.targets.some((t) => t.provider !== 'linkedin') && (
+            <p className="shub-hint">Shown as LinkedIn will get it; Facebook gets a link card.</p>
+          )}
+        </>
+      ) : (
+        <>
+          <PostText text={post.body || (post.linkUrl ? '' : 'No text')} />
+          <MediaGrid urls={post.images.map((i) => i.url)} proxy={false} />
+          {post.linkUrl && post.images.length === 0 && (
+            <LinkCard url={post.linkUrl} title={post.linkTitle} description={post.linkDescription} imageUrl={post.linkImageUrl} />
+          )}
+        </>
       )}
       {post.targets.length > 1 && (
         <div className="shub-targets">

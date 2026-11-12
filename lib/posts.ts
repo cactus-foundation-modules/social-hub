@@ -92,12 +92,16 @@ export async function getPost(id: string): Promise<Post | null> {
 }
 
 /** Posts in the given states. Scheduled ones come soonest-first; everything else newest-first. */
-export async function listPosts(statuses: PostStatus[], limit = 100): Promise<Post[]> {
+/** `connectionId` keeps only posts that go to that page. */
+export async function listPosts(statuses: PostStatus[], limit = 100, connectionId: string | null = null): Promise<Post[]> {
   const scheduledFirst = statuses.length > 0 && statuses.every((s) => s === 'scheduled')
   const order = scheduledFirst ? Prisma.sql`"scheduled_at" ASC` : Prisma.sql`"created_at" DESC`
   const rows = await prisma.$queryRaw<PostRow[]>`
     SELECT ${POST_COLUMNS} FROM "shub_posts"
     WHERE "status" IN (${Prisma.join(statuses)})
+      AND (${connectionId}::text IS NULL OR EXISTS (
+        SELECT 1 FROM "shub_post_targets" t WHERE t."post_id" = "shub_posts"."id" AND t."connection_id" = ${connectionId}
+      ))
     ORDER BY ${order} LIMIT ${limit}
   `
   const targets = await targetsFor(rows.map((r) => r.id))

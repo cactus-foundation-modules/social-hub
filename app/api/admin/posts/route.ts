@@ -1,4 +1,4 @@
-// GET  /api/m/social-hub/admin/posts?view=scheduled|drafts|issues
+// GET  /api/m/social-hub/admin/posts?view=scheduled|drafts|issues[&connection=<page id>]
 // POST /api/m/social-hub/admin/posts - save a draft, schedule a post, or post it now
 import { NextRequest, NextResponse } from 'next/server'
 import { errorResponse } from '@/lib/utils'
@@ -23,7 +23,8 @@ export async function GET(request: NextRequest) {
   if ('response' in g) return g.response
   const statuses = VIEWS[request.nextUrl.searchParams.get('view') ?? 'scheduled']
   if (!statuses) return errorResponse('Unknown view', 400)
-  return NextResponse.json({ posts: await listPosts(statuses) })
+  const connection = request.nextUrl.searchParams.get('connection')
+  return NextResponse.json({ posts: await listPosts(statuses, 100, connection || null) })
 }
 
 export async function POST(request: NextRequest) {

@@ -9,7 +9,7 @@ import { api } from '@/modules/social-hub/components/admin/hub/api'
 import { Masonry } from '@/modules/social-hub/components/admin/hub/Masonry'
 import { EditRemoteSheet } from '@/modules/social-hub/components/admin/hub/EditRemoteSheet'
 import { Composer } from '@/modules/social-hub/components/admin/hub/Composer'
-import { Avatar } from '@/modules/social-hub/components/admin/hub/Parts'
+import { NetworkAvatar } from '@/modules/social-hub/components/admin/hub/Parts'
 import { LocalPostRow, RemotePostRow } from '@/modules/social-hub/components/admin/hub/PostCards'
 import { Icon } from '@/modules/social-hub/components/admin/hub/Glyphs'
 import '@/modules/social-hub/components/admin/hub/hub.css'
@@ -53,7 +53,7 @@ export default function SocialHubApp() {
       const res = await api<{ posts: RemotePost[] }>(`/admin/feed${connection ? `?connection=${encodeURIComponent(connection)}` : ''}`)
       if (res.ok) { setFeed(res.data.posts); setError('') } else setError(res.error)
     } else {
-      const res = await api<{ posts: Post[] }>(`/admin/posts?view=${v}`)
+      const res = await api<{ posts: Post[] }>(`/admin/posts?view=${v}${connection ? `&connection=${encodeURIComponent(connection)}` : ''}`)
       if (res.ok) { setLocal(res.data.posts); setError('') } else setError(res.error)
     }
     setLoading(false)
@@ -196,7 +196,7 @@ export default function SocialHubApp() {
               <button type="button" className="shub-chip shub-chip--plain" aria-pressed={filter === null} onClick={() => setFilter(null)}>All pages</button>
               {connections.map((c) => (
                 <button key={c.id} type="button" className="shub-chip" aria-pressed={filter === c.id} onClick={() => setFilter(filter === c.id ? null : c.id)}>
-                  <Avatar name={c.name} pictureUrl={c.pictureUrl} provider={c.provider} />
+                  <NetworkAvatar providers={[c.provider]} name={c.name} />
                   <span className="shub-chip-name">{c.name}</span>
                   {c.status !== 'active' && <span className="shub-chip-warn" title="Needs reconnecting"><Icon name="warn" size={13} /></span>}
                 </button>
@@ -232,7 +232,6 @@ export default function SocialHubApp() {
                 {feed.map((p) => <RemotePostRow
                   key={`${p.connectionId}:${p.externalId}`}
                   post={p}
-                  connection={connections.find((c) => c.id === p.connectionId)}
                   busy={busyId === `${p.connectionId}:${p.externalId}`}
                   onEdit={canPost && p.provider === 'facebook' ? setEditingRemote : undefined}
                   onDelete={canPost ? removeRemote : undefined}
@@ -256,7 +255,7 @@ export default function SocialHubApp() {
                 <LocalPostRow
                   key={p.id}
                   post={p}
-                  connections={connections}
+                  focus={connections.find((c) => c.id === filter)?.provider ?? null}
                   busy={busyId === p.id}
                   onEdit={(post) => setComposer({ editing: post })}
                   onPublish={(post) => void publishNow(post)}

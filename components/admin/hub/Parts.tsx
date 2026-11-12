@@ -22,6 +22,18 @@ export function Avatar({ name, pictureUrl, provider, large }: { name: string; pi
   )
 }
 
+/** A post's network as a round icon, in place of a page-name initial. Several networks overlap. */
+export function NetworkAvatar({ providers, name }: { providers: Provider[]; name: string }) {
+  const unique = [...new Set(providers)]
+  return (
+    <span className="shub-netavatar" title={name}>
+      {unique.map((p) => (
+        <span key={p} className="shub-avatar shub-avatar--net" title={PROVIDER_LABEL[p]}><ProviderGlyph provider={p} size={14} /></span>
+      ))}
+    </span>
+  )
+}
+
 export function MediaGrid({ urls, proxy = true }: { urls: string[]; proxy?: boolean }) {
   const shown = urls.slice(0, 4)
   if (shown.length === 0) return null
