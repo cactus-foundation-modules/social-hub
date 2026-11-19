@@ -4,7 +4,7 @@ import { escapeLinkedInText, linkedInCommentary, linkedInImages } from '@/module
 import { readCapped, safeGet } from '@/modules/social-hub/lib/safe-fetch'
 import type { AppCredentials } from '@/modules/social-hub/lib/settings'
 import type { LoginResult, PublishInput, PublishResult, RemotePostInput, RemoteRead } from '@/modules/social-hub/lib/provider-types'
-import { SocialError, type PostImage } from '@/modules/social-hub/lib/types'
+import { SocialError, isNoAnswer, type PostImage } from '@/modules/social-hub/lib/types'
 
 const API = 'https://api.linkedin.com/rest'
 
@@ -417,7 +417,14 @@ export async function fetchLinkedInPosts(orgId: string, token: string): Promise<
   const elements: unknown[] = []
   let stoppedEarly: string | null = null
   for (let page = 0; page < LINKEDIN_PAGES_MAX; page++) {
-    const res = await apiGet(`/posts?author=${author}&q=author&count=${LINKEDIN_PAGE}&start=${page * LINKEDIN_PAGE}&sortBy=LAST_MODIFIED`, token)
+    let res: Awaited<ReturnType<typeof apiGet>>
+    try {
+      res = await apiGet(`/posts?author=${author}&q=author&count=${LINKEDIN_PAGE}&start=${page * LINKEDIN_PAGE}&sortBy=LAST_MODIFIED`, token)
+    } catch (err) {
+      // Older pages getting no answer just end the read quietly; the newer posts are already in hand.
+      if (page > 0 && isNoAnswer(err)) break
+      throw err
+    }
     if (!res.ok) {
       // The first page failing is the real error; a later one failing just ends the read.
       if (page === 0) throw linkedInError(res.json, res.status)

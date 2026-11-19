@@ -2,7 +2,7 @@ import { absoluteUrl } from '@/modules/social-hub/lib/media-url'
 import { asNumber, asRecord, asString, formBody, PUBLISH_TIMEOUT_MS, requestJson } from '@/modules/social-hub/lib/http'
 import type { AppCredentials } from '@/modules/social-hub/lib/settings'
 import type { LoginResult, PublishInput, PublishResult, RemotePostInput, RemoteRead } from '@/modules/social-hub/lib/provider-types'
-import { SocialError } from '@/modules/social-hub/lib/types'
+import { SocialError, isNoAnswer } from '@/modules/social-hub/lib/types'
 
 export const FB_GRAPH_VERSION = 'v24.0'
 const GRAPH = `https://graph.facebook.com/${FB_GRAPH_VERSION}`
@@ -341,7 +341,8 @@ export async function fetchFacebookPosts(pageId: string, token: string): Promise
         break
       } catch (err) {
         // A refusal of the extras steps down; a sign-in problem or anything else stands.
-        if (!(err instanceof SocialError) || err.authFailure) throw err
+        // No answer on the newest page is not a refusal, so asking for less would only wait longer.
+        if (!(err instanceof SocialError) || err.authFailure || (page === 0 && isNoAnswer(err))) throw err
         lastError = err
         if (page === 0 && step === 0) reason = err.message
       }
@@ -349,6 +350,9 @@ export async function fetchFacebookPosts(pageId: string, token: string): Promise
     if (!res) {
       // Nothing worked on the first page: that is the real error. Later on, keep what was read.
       if (page === 0) throw lastError
+      // Older pages are the slow ones and the least wanted: no answer just ends the read
+      // quietly with what is already in hand. A real refusal is still worth saying.
+      if (isNoAnswer(lastError)) break
       stoppedEarly = lastError instanceof SocialError ? lastError.message : 'Facebook stopped answering.'
       break
     }

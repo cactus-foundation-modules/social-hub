@@ -1,4 +1,4 @@
-import { SocialError, TIMEOUT_ERROR } from '@/modules/social-hub/lib/types'
+import { SocialError, TIMEOUT_ERROR, UNREACHABLE_ERROR } from '@/modules/social-hub/lib/types'
 
 const TIMEOUT_MS = 15_000
 
@@ -14,7 +14,7 @@ export async function requestJson(url: string, init: RequestInit = {}, timeoutMs
     res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs), cache: 'no-store' })
   } catch (err) {
     if (err instanceof Error && err.name === 'TimeoutError') throw new SocialError(TIMEOUT_ERROR)
-    throw new SocialError('The network could not be reached. Try again in a minute.')
+    throw new SocialError(UNREACHABLE_ERROR)
   }
   const text = await res.text()
   let json: unknown = null

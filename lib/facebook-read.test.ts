@@ -7,6 +7,7 @@ vi.mock('@/modules/social-hub/lib/http', async (orig) => ({
 }))
 
 import { fetchFacebookPosts } from '@/modules/social-hub/lib/facebook'
+import { SocialError, TIMEOUT_ERROR } from '@/modules/social-hub/lib/types'
 
 const ok = (data: unknown[], next = false) => ({
   ok: true, status: 200, headers: new Headers(), text: '',
@@ -64,6 +65,21 @@ describe('reading a Facebook page', () => {
     expect(read.notice).toMatch(/Older posts could not be read/)
     expect(requestJson).toHaveBeenCalledTimes(2)
     expect(fieldsOf(1)).toBe(fieldsOf(0))
+  })
+
+  it('keeps what it read and says nothing when an older page gets no answer', async () => {
+    const full = Array.from({ length: 25 }, (_, i) => post(i))
+    requestJson.mockResolvedValueOnce(ok(full, true))
+    requestJson.mockRejectedValueOnce(new SocialError(TIMEOUT_ERROR))
+    const read = await fetchFacebookPosts('1', 't')
+    expect(read.posts).toHaveLength(25)
+    expect(read.notice).toBeNull()
+  })
+
+  it('still fails when the newest page gets no answer', async () => {
+    requestJson.mockRejectedValueOnce(new SocialError(TIMEOUT_ERROR))
+    await expect(fetchFacebookPosts('1', 't')).rejects.toThrow(/took too long/)
+    expect(requestJson).toHaveBeenCalledTimes(1)
   })
 })
 

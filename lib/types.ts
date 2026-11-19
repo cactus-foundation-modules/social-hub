@@ -98,7 +98,13 @@ export const LIMITS = {
 /** What a page is told when the network goes quiet mid-post. Auto-retry recognises it by this start. */
 export const TIMEOUT_ERROR_PREFIX = 'The network took too long to answer.'
 export const TIMEOUT_ERROR = `${TIMEOUT_ERROR_PREFIX} Try again in a minute.`
-export const INTERRUPTED_ERROR = 'This was interrupted part way. Check the page before retrying, in case it went out.'
+export const UNREACHABLE_ERROR = 'The network could not be reached. Try again in a minute.'
+
+/** True for a request that got no answer at all (timed out or never connected), as opposed to a refusal. */
+export function isNoAnswer(err: unknown): boolean {
+  return err instanceof SocialError && (err.message === TIMEOUT_ERROR || err.message === UNREACHABLE_ERROR)
+}
+export const INTERRUPTED_ERROR ='This was interrupted part way. Check the page before retrying, in case it went out.'
 
 /** Said when an unattended retry could not tell whether the first attempt had already gone out, so it sent nothing. */
 export const UNCHECKED_ERROR =
